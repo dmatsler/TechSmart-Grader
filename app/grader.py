@@ -4,7 +4,13 @@ import ast
 from dataclasses import dataclass
 
 from app.models import AssignmentConfig, GradingInput, GradingResult, SubmissionStatus, ZoneMatch
-from app.utils import find_main_loop_block, has_non_comment_statement, regex_any_match, token_present
+from app.utils import (
+    find_main_loop_block,
+    has_non_comment_statement,
+    regex_any_match,
+    strip_comment_blank_lines,
+    token_present,
+)
 
 
 @dataclass
@@ -12,36 +18,47 @@ class AnalysisSummary:
     zone_matches: list[ZoneMatch]
     requirement_failures: list[str]
     coherence_failures: list[str]
+    relevant_zone_match_count: int
+    meaningful_zone_match_count: int
     meaningful_attempt: bool
-    expected_zone_count: int
-    required_zone_count: int
 
 
 def _check_fill_zones(assignment: AssignmentConfig, code: str) -> list[ZoneMatch]:
     matches: list[ZoneMatch] = []
+    code_lines = strip_comment_blank_lines(code)
+
     for zone in assignment.fill_zones:
         attempt_patterns = zone.attempt_patterns or zone.expected_patterns
-        matched_attempt = regex_any_match(attempt_patterns, code) if attempt_patterns else False
-        matched_expected = regex_any_match(zone.expected_patterns, code) if zone.expected_patterns else False
         anti_hit = regex_any_match(zone.anti_patterns, code) if zone.anti_patterns else False
-        meaningful_line = matched_attempt and has_non_comment_statement(code)
-        matched = (matched_attempt or matched_expected) and not anti_hit and meaningful_line
-        details = ""
+
+        matched_attempt_line = False
+        matched_expected_line = False
+        for line in code_lines:
+            if attempt_patterns and regex_any_match(attempt_patterns, line):
+                matched_attempt_line = True
+            if zone.expected_patterns and regex_any_match(zone.expected_patterns, line):
+                matched_expected_line = True
+
+        meaningful_line = matched_attempt_line and not anti_hit
+        matched = meaningful_line and (matched_attempt_line or matched_expected_line)
+
+        detail = ""
         if anti_hit:
-            details = "Anti-pattern detected"
-        elif not meaningful_line:
-            details = "No meaningful line"
-        elif not matched_expected:
-            details = "Attempt pattern matched, expected pattern missing"
+            detail = "Anti-pattern detected"
+        elif not matched_attempt_line:
+            detail = "No assignment-relevant line found"
+        elif not matched_expected_line:
+            detail = "Attempt pattern matched, expected pattern missing"
+
         matches.append(
             ZoneMatch(
                 name=zone.name,
                 matched=matched,
-                matched_expected=matched_expected,
-                matched_attempt=matched_attempt,
+                matched_expected=matched_expected_line,
+                matched_attempt=matched_attempt_line,
                 anti_pattern_hit=anti_hit,
                 has_meaningful_line=meaningful_line,
-                details=details,
+                details=detail,
             )
         )
     return matches
@@ -70,51 +87,46 @@ def _check_requirements(assignment: AssignmentConfig, code: str) -> list[str]:
     return failures
 
 
+def _guardrail_names(assignment: AssignmentConfig) -> set[str]:
+    return {item.get("name", "") for item in assignment.requirement_checks.coherence_guardrails}
+
+
 def _check_coherence_guardrails(assignment: AssignmentConfig, code: str) -> list[str]:
     failures: list[str] = []
+    guardrails = _guardrail_names(assignment)
     loop_block = find_main_loop_block(code)
 
-    if "draw_inside_loop" in str(assignment.requirement_checks.coherence_guardrails):
+    if "draw_inside_loop" in guardrails:
         if "pygame.draw" in code and "pygame.draw" not in loop_block:
             failures.append("Draw call appears only outside main while-loop")
 
-    if "flip_inside_loop" in str(assignment.requirement_checks.coherence_guardrails):
+    if "flip_inside_loop" in guardrails:
         has_flip = "pygame.display.flip" in code or "pygame.display.update" in code
         in_loop_flip = "pygame.display.flip" in loop_block or "pygame.display.update" in loop_block
         if has_flip and not in_loop_flip:
             failures.append("Display flip/update appears only outside main while-loop")
 
-    if "updated_pos_used_in_draw" in str(assignment.requirement_checks.coherence_guardrails):
-        updated = any(t in code for t in ["x +=", "y +=", "offset +=", "offset -=", "x = x", "y = y"])
-        draw_uses = any(
-            token in code
-            for token in [
-                "pygame.draw.circle(screen,",
-                "pygame.draw.rect(screen,",
-                "pygame.draw.line(screen,",
-                "(x",
-                ", x",
-                "(y",
-                ", y",
-                "offset",
-            ]
+    if "updated_pos_used_in_draw" in guardrails:
+        updated = regex_any_match([r"\b(x|y|offset|dx|dy)\s*[-+]=\s*\d+"], code)
+        draw_line_with_position = regex_any_match(
+            [
+                r"pygame\.draw\.(circle|rect|line)\s*\([^\n]*(\bx\b|\by\b|\boffset\b)",
+            ],
+            code,
         )
-        if updated and not draw_uses:
+        if updated and not draw_line_with_position:
             failures.append("Position/offset updated but never used in draw context")
 
-    if "offset_used_with_rect" in str(assignment.requirement_checks.coherence_guardrails):
-        updated_offset = "offset +=" in code or "offset -=" in code or "offset = offset" in code
-        used_with_rect = any(
-            fragment in code
-            for fragment in [
-                "rect.y =",
-                "rect.x =",
-                "_rect.y =",
-                "_rect.top =",
-                "elevator_rect",
-            ]
-        ) and "offset" in code
-        if updated_offset and not used_with_rect:
+    if "offset_used_with_rect" in guardrails:
+        updated_offset = regex_any_match([r"\boffset\s*[-+]=\s*\d+", r"\boffset\s*=\s*offset\s*[-+]\s*\d+"], code)
+        offset_on_rect_line = regex_any_match(
+            [
+                r"\b\w*_rect\.(x|y|top|left)\s*=\s*[^\n]*\boffset\b",
+                r"\belevator_rect\.(x|y|top|left)\s*=\s*[^\n]*\boffset\b",
+            ],
+            code,
+        )
+        if updated_offset and not offset_on_rect_line:
             failures.append("Offset updated but not applied to rect position")
 
     return failures
@@ -122,22 +134,29 @@ def _check_coherence_guardrails(assignment: AssignmentConfig, code: str) -> list
 
 def analyze_submission(assignment: AssignmentConfig, code: str) -> AnalysisSummary:
     zone_matches = _check_fill_zones(assignment, code)
-    matched_required = [z for z in zone_matches if z.matched]
-    required_zones = [z for z in zone_matches if True]
-    required_zone_count = len(required_zones)
-    expected_zone_count = max(assignment.min_zones_matched_default, min(2, required_zone_count))
+    meaningful_matches = [z for z in zone_matches if z.matched]
+
+    relevant_matches = [
+        z for z in zone_matches if z.matched_attempt and z.has_meaningful_line and not z.anti_pattern_hit
+    ]
+
+    required_zones = [z for z in assignment.fill_zones if z.required]
+    required_zone_target = assignment.min_zones_matched_default
+    if required_zones:
+        required_zone_target = max(required_zone_target, min(2, len(required_zones)))
+
+    meaningful_attempt = has_non_comment_statement(code) and len(meaningful_matches) >= required_zone_target
+
     requirement_failures = _check_requirements(assignment, code)
     coherence_failures = _check_coherence_guardrails(assignment, code)
-    meaningful_attempt = len(matched_required) >= expected_zone_count
-    if coherence_failures and not matched_required:
-        meaningful_attempt = False
+
     return AnalysisSummary(
         zone_matches=zone_matches,
         requirement_failures=requirement_failures,
         coherence_failures=coherence_failures,
+        relevant_zone_match_count=len(relevant_matches),
+        meaningful_zone_match_count=len(meaningful_matches),
         meaningful_attempt=meaningful_attempt,
-        expected_zone_count=expected_zone_count,
-        required_zone_count=required_zone_count,
     )
 
 
@@ -149,11 +168,16 @@ def grade_submission(assignment: AssignmentConfig, payload: GradingInput) -> Gra
         and payload.techsmart_lines_completed == 0
         and (payload.techsmart_lines_expected or 0) > 0
     ):
-        score = 0
-        explanation = (
-            f"Turned in with 0/{payload.techsmart_lines_expected} lines, so this counts as no attempt."
+        return _to_result(
+            assignment,
+            payload,
+            0,
+            f"Turned in with 0/{payload.techsmart_lines_expected} lines, so this counts as no attempt.",
+            [],
+            [],
+            [],
+            [],
         )
-        return _to_result(assignment, payload, score, explanation, [], [], [], [])
 
     if payload.status == SubmissionStatus.NOT_STARTED:
         return _to_result(
@@ -168,21 +192,33 @@ def grade_submission(assignment: AssignmentConfig, payload: GradingInput) -> Gra
         )
 
     analysis = analyze_submission(assignment, code)
-    matched_names = [z.name for z in analysis.zone_matches if z.matched_expected]
-    unmet_names = [z.name for z in analysis.zone_matches if not z.matched_expected]
+    matched_names = [z.name for z in analysis.zone_matches if z.matched]
+    unmet_names = [z.name for z in analysis.zone_matches if z.matched is False]
 
     if payload.status == SubmissionStatus.STARTED_NOT_SUBMITTED:
-        score = 1 if analysis.meaningful_attempt else 0
+        score = 1 if analysis.relevant_zone_match_count >= 1 else 0
         explanation = (
-            f"Relevant attempt detected in {len(matched_names)} required zones, but not submitted."
+            "Relevant attempt detected, but the assignment is still incomplete and was not submitted."
             if score == 1
-            else "Started but no meaningful assignment-specific attempt detected."
+            else "Started but no assignment-specific fill-zone attempt was detected."
         )
         return _to_result(
             assignment,
             payload,
             score,
             explanation,
+            matched_names,
+            unmet_names,
+            analysis.coherence_failures,
+            analysis.requirement_failures,
+        )
+
+    if analysis.relevant_zone_match_count == 0:
+        return _to_result(
+            assignment,
+            payload,
+            1,
+            "Turned in, but no relevant assignment-specific attempt was detected.",
             matched_names,
             unmet_names,
             analysis.coherence_failures,
@@ -196,20 +232,16 @@ def grade_submission(assignment: AssignmentConfig, payload: GradingInput) -> Gra
         except SyntaxError:
             syntax_error = True
 
-    if not analysis.meaningful_attempt:
-        score = 1
-        explanation = "Turned in, but only weak or non-relevant work was detected."
-    else:
-        score = 3
-        explanation = "Program includes loop, drawing, timing control, and required logic."
-        if syntax_error or analysis.requirement_failures or analysis.coherence_failures or unmet_names:
-            score = 2
-            if syntax_error:
-                explanation = "Meaningful attempt found, but code has syntax issues."
-            elif analysis.coherence_failures:
-                explanation = analysis.coherence_failures[0]
-            else:
-                explanation = "Relevant attempt detected, but key requirements were missing."
+    score = 3
+    explanation = "Program includes the needed loop, drawing call, timing control, and required logic."
+    if not analysis.meaningful_attempt or syntax_error or analysis.requirement_failures or analysis.coherence_failures or unmet_names:
+        score = 2
+        if syntax_error:
+            explanation = "Meaningful attempt found, but code has syntax issues."
+        elif analysis.coherence_failures:
+            explanation = analysis.coherence_failures[0]
+        else:
+            explanation = "Relevant attempt detected in required zones, but key requirements were missing."
 
     return _to_result(
         assignment,

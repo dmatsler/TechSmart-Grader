@@ -63,7 +63,7 @@ pytest -q
    - If status is `turned_in` and `techsmart_lines_completed == 0` and `techsmart_lines_expected > 0`, score is `0` immediately.
 2. **Status rules**:
    - `not_started` -> score `0`
-   - `started_not_submitted` -> `0` or `1` depending on meaningful attempt
+   - `started_not_submitted` -> `0` if no relevant fill-zone attempt, `1` if at least one relevant zone is matched
    - `turned_in` -> `1`, `2`, or `3` based on meaningful attempt, syntax/requirement/coherence checks
 3. **Meaningful attempt**:
    - Template-aware zone matching via `fill_zones`
@@ -77,7 +77,7 @@ pytest -q
 
 - Runtime smoke execution is intentionally disabled for MVP (pygame runtime sandboxing can be fragile in generic local environments).
 - Coherence checks are text-based and intentionally lightweight; architecture is ready for deeper AST-based checks later.
-- Session history is in-memory only (no DB, reset on server restart).
+- Session history is in-memory only (no DB, reset on server restart), but include/exclude toggles persist within the active browser session.
 - No authentication, deployment, TechSmart API integration, or browser extension integration yet.
 
 ## Future extensibility
