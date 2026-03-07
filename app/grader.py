@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from dataclasses import dataclass
 
 from app.models import AssignmentConfig, GradingInput, GradingResult, SubmissionStatus, ZoneMatch
@@ -12,6 +13,8 @@ from app.utils import (
     token_present,
 )
 
+TARGET_ASSIGNMENT_POINT_PATTERN = "3_3_animating_shapes_1_technique1practice1_py"
+
 
 @dataclass
 class AnalysisSummary:
@@ -21,6 +24,36 @@ class AnalysisSummary:
     relevant_zone_match_count: int
     meaningful_zone_match_count: int
     meaningful_attempt: bool
+
+
+def _extract_point_vars_derived_from_offset(code: str) -> list[str]:
+    pattern = re.compile(
+        r"\b([A-Za-z_]\w*)\s*=\s*\([^\n\)]*\b\w*offset\w*\b[^\n\)]*\)",
+        flags=re.MULTILINE,
+    )
+    return [match.group(1) for match in pattern.finditer(code)]
+
+
+def _matches_point_based_movement_pattern(assignment: AssignmentConfig, zone_name: str, code: str) -> bool:
+    if assignment.id != TARGET_ASSIGNMENT_POINT_PATTERN or zone_name != "position_update":
+        return False
+
+    offset_updated = regex_any_match(
+        [r"\b\w*offset\w*\s*[-+]=\s*\d+", r"\b\w*offset\w*\s*=\s*\w*offset\w*\s*[-+]\s*\d+"],
+        code,
+    )
+    if not offset_updated:
+        return False
+
+    point_vars = _extract_point_vars_derived_from_offset(code)
+    if not point_vars:
+        return False
+
+    draw_uses_point = any(
+        regex_any_match([rf"pygame\.draw\.(line|circle|rect)\s*\([^\n]*\b{re.escape(point_var)}\b"], code)
+        for point_var in point_vars
+    )
+    return draw_uses_point
 
 
 def _check_fill_zones(assignment: AssignmentConfig, code: str) -> list[ZoneMatch]:
@@ -38,6 +71,10 @@ def _check_fill_zones(assignment: AssignmentConfig, code: str) -> list[ZoneMatch
                 matched_attempt_line = True
             if zone.expected_patterns and regex_any_match(zone.expected_patterns, line):
                 matched_expected_line = True
+
+        if _matches_point_based_movement_pattern(assignment, zone.name, code):
+            matched_attempt_line = True
+            matched_expected_line = True
 
         meaningful_line = matched_attempt_line and not anti_hit
         matched = meaningful_line and (matched_attempt_line or matched_expected_line)
@@ -107,14 +144,22 @@ def _check_coherence_guardrails(assignment: AssignmentConfig, code: str) -> list
             failures.append("Display flip/update appears only outside main while-loop")
 
     if "updated_pos_used_in_draw" in guardrails:
-        updated = regex_any_match([r"\b(x|y|offset|dx|dy)\s*[-+]=\s*\d+"], code)
+        updated = regex_any_match([r"\b(x|y|offset|dx|dy)\s*[-+]=\s*\d+", r"\b\w*offset\w*\s*[-+]=\s*\d+"], code)
         draw_line_with_position = regex_any_match(
             [
                 r"pygame\.draw\.(circle|rect|line)\s*\([^\n]*(\bx\b|\by\b|\boffset\b)",
             ],
             code,
         )
-        if updated and not draw_line_with_position:
+        draw_uses_point_from_offset = False
+        if assignment.id == TARGET_ASSIGNMENT_POINT_PATTERN:
+            point_vars = _extract_point_vars_derived_from_offset(code)
+            draw_uses_point_from_offset = any(
+                regex_any_match([rf"pygame\.draw\.(line|circle|rect)\s*\([^\n]*\b{re.escape(point_var)}\b"], code)
+                for point_var in point_vars
+            )
+
+        if updated and not (draw_line_with_position or draw_uses_point_from_offset):
             failures.append("Position/offset updated but never used in draw context")
 
     if "offset_used_with_rect" in guardrails:

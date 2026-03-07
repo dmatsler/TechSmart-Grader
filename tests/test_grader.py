@@ -142,6 +142,43 @@ while frames < 10:
     assert result.points == 100
 
 
+def test_turned_in_point_tuple_offset_pattern_scores_three():
+    assignment = _assignment()
+    code = """
+import pygame
+window = pygame.display.set_mode((800, 600))
+frames = 0
+yoyo_x = 250
+yoyo_y = 100
+yoyo_offset = 0
+string_color = (255, 255, 255)
+yoyo_color = (255, 0, 0)
+
+while frames < 100:
+    yoyo_offset += 4
+    point = (yoyo_x, yoyo_y + yoyo_offset)
+
+    window.fill((0, 0, 0))
+    pygame.draw.line(window, string_color, (0, 0), point)
+    pygame.draw.circle(window, yoyo_color, point, 50)
+
+    pygame.display.flip()
+    pygame.time.wait(40)
+    frames += 1
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(
+            assignment_id=assignment.id,
+            status=SubmissionStatus.TURNED_IN,
+            student_code=code,
+        ),
+    )
+    assert result.rubric_score == 3
+    assert result.points == 100
+
+
+
 def test_weighted_unit_grade_calculation():
     entries = [
         UnitGradeEntry("a", "A", 100, include=True, weight=2.0),
