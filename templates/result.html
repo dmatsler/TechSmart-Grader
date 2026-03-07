@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>Grading Result</h2>
+  <p><strong>Assignment:</strong> {{ result.assignment_title }}</p>
+  <p><strong>Status:</strong> {{ result.status.value }}</p>
+  <p class="score-badge">Rubric Score: {{ result.rubric_score }} / 3</p>
+  <p class="score-badge">Points: {{ result.points }} / 100</p>
+
+  <h3>Teacher Explanation</h3>
+  <p>{{ result.explanation }}</p>
+
+  <div class="grid-2">
+    <div>
+      <h3>Matched Fill Zones</h3>
+      <ul>
+        {% for item in result.matched_fill_zones %}
+        <li>{{ item }}</li>
+        {% else %}
+        <li>None</li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div>
+      <h3>Unmet Fill Zones</h3>
+      <ul>
+        {% for item in result.unmet_fill_zones %}
+        <li>{{ item }}</li>
+        {% else %}
+        <li>None</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <h3>Coherence Guardrail Failures</h3>
+      <ul>
+        {% for item in result.coherence_guardrail_failures %}
+        <li>{{ item }}</li>
+        {% else %}
+        <li>None</li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div>
+      <h3>Requirement Check Failures</h3>
+      <ul>
+        {% for item in result.requirement_check_failures %}
+        <li>{{ item }}</li>
+        {% else %}
+        <li>None</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <p>
+    <a href="/">Grade another submission</a> ·
+    <a href="/unit-grade">View Unit Grade</a>
+  </p>
+</section>
+{% endblock %}
