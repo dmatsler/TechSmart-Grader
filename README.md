@@ -1,91 +1,90 @@
-# TechSmart Grading Companion
+# TechSmart Grading Companion (MVP)
 
-A prototype teacher-facing grading tool for **CS101 Unit 3.3** that replaces line-count-based progress indicators with a more meaningful rubric-based scoring workflow.
+TechSmart Grading Companion is a **local, teacher-facing MVP web app** for grading **CS101 Unit 3.3 Python/Pygame assignments** with rubric-based scoring.
 
-## Purpose
+> This is an MVP prototype for TechSmart-style rubric grading. It prioritizes static checks + template-aware fill-zone matching over full runtime execution.
 
-This project is designed to help grade TechSmart Python/Pygame assignments more fairly and more efficiently by using:
+## What this app does
 
-- a **0–3 rubric score**
-- a **0 / 50 / 75 / 100 point conversion**
-- **template-aware attempt detection**
-- **assignment-specific fill-zone checks**
-- **anti-gaming guardrails** to prevent students from filling bubbles with unrelated code
-- a **unit total out of 100** across only the assignments the teacher chooses to count
+- Grades pasted student code against the provided Unit 3.3 config.
+- Returns:
+  - rubric score (`0`, `1`, `2`, `3`)
+  - point score (`0`, `50`, `75`, `100`)
+  - teacher-facing explanation
+  - matched/unmet fill zones
+  - coherence guardrail failures
+  - requirement check failures
+- Tracks graded assignments in-memory per browser session and computes a **unit grade out of 100**.
 
-## Current Scope
+## Stack
 
-This repo currently focuses on:
+- Python 3.11+
+- FastAPI
+- Jinja2 templates
+- PyYAML config loading
+- pytest test suite
 
-- **CS101**
-- **Unit 3.3 – Animation**
-- the assignments the teacher currently grades as part of the unit
+## Project structure
 
-## Included Files
+- `app/main.py` – FastAPI routes + in-memory session results
+- `app/config_loader.py` – YAML-first / JSON-fallback config loader + validation
+- `app/grader.py` – grading engine and rule evaluation
+- `app/models.py` – typed dataclass models for config, request, and grading output
+- `app/utils.py` – parsing/matching helpers
+- `templates/` – server-rendered pages
+- `static/style.css` – minimal CSS
+- `tests/test_grader.py` – MVP grading rules tests
 
-- `unit_3_3_animation_grading_config_working.yaml`  
-  Primary human-readable grading config.
+## Setup
 
-- `unit_3_3_animation_grading_config_working.json`  
-  JSON version of the same grading config.
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-- `CS101_Unit_3_3_Starter_and_Solution_Master_fresh.pdf`  
-  Master reference PDF containing starter/template code followed by solution code for the graded Unit 3.3 assignments.
+## Run locally
 
-- `Unit_3_3_Autograder_Config_Guide_fresh.md`  
-  Notes explaining how the config is intended to be used.
+```bash
+uvicorn app.main:app --reload
+```
 
-## MVP Goal
+Open: <http://127.0.0.1:8000>
 
-Build a local web app called **TechSmart Grading Companion** that allows a teacher to:
+## Run tests
 
-1. Select an assignment
-2. Paste student code
-3. Indicate assignment status:
-   - not started
-   - started, not submitted
-   - turned in
-4. Optionally enter TechSmart line-count values
-5. Receive:
-   - rubric score (0, 1, 2, 3)
-   - point score (0, 50, 75, 100)
-   - explanation of why
-   - missing requirement flags
-   - unit total out of 100
+```bash
+pytest -q
+```
 
-## Rubric Model
+## Grading rules implemented
 
-- **0** = no meaningful attempt
-- **1** = meaningful but incomplete attempt
-- **2** = turned in, but incorrect / buggy / incomplete
-- **3** = correct
+1. **Turned-in + 0/X lines rule** (only line-count rule):
+   - If status is `turned_in` and `techsmart_lines_completed == 0` and `techsmart_lines_expected > 0`, score is `0` immediately.
+2. **Status rules**:
+   - `not_started` -> score `0`
+   - `started_not_submitted` -> `0` if no relevant fill-zone attempt, `1` if at least one relevant zone is matched
+   - `turned_in` -> `1`, `2`, or `3` based on meaningful attempt, syntax/requirement/coherence checks
+3. **Meaningful attempt**:
+   - Template-aware zone matching via `fill_zones`
+   - Excludes anti-pattern matches
+   - Requires minimum relevant zone matches
+4. **Score 3 expectations**:
+   - Expected patterns + requirement checks + guardrails must pass
+   - Syntax parse via `ast.parse`
 
-Point conversion:
+## MVP assumptions / limitations
 
-- **0 → 0**
-- **1 → 50**
-- **2 → 75**
-- **3 → 100**
+- Runtime smoke execution is intentionally disabled for MVP (pygame runtime sandboxing can be fragile in generic local environments).
+- Coherence checks are text-based and intentionally lightweight; architecture is ready for deeper AST-based checks later.
+- Session history is in-memory only (no DB, reset on server restart), but include/exclude toggles persist within the active browser session.
+- No authentication, deployment, TechSmart API integration, or browser extension integration yet.
 
-## Key Grading Rules
+## Future extensibility
 
-- TechSmart line count is **ignored** for grading except in one case:
-  - if the assignment is **turned in** and shows **0 / X lines of code**, it counts as **Score 0**
-- “Meaningful attempt” must be **relevant to the assignment’s expected fill zones**
-- Random pasted code should **not** count as meaningful
-- Starter-heavy assignments should **not** get credit just because the template already contains code
+The app is structured so later versions can add:
 
-## Long-Term Vision
-
-This project can later expand to include:
-
-- more CS101 units
-- more TechSmart courses
-- browser-extension support for pulling code from TechSmart’s **More Actions → View**
-- stronger AST-based analysis
-- optional sandboxed runtime checks
-- a prototype suitable for proposing to **TechSmart** as a platform improvement
-
-## Notes
-
-This is currently a **prototype / MVP concept** and is intended first for local teacher use, then potentially for broader refinement and demonstration.
+- browser extension ingestion from TechSmart “More Actions -> View”
+- PDF/template diff helpers
+- AST-level semantic checks
+- additional units beyond CS101 Unit 3.3
