@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>Grade CS101 Unit 3.3 Submission</h2>
+  <form action="/grade" method="post">
+    <label for="assignment_id">Assignment</label>
+    <select id="assignment_id" name="assignment_id" required>
+      {% for assignment in assignments %}
+      <option value="{{ assignment.id }}">{{ assignment.display_name }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="status">Submission Status</label>
+    <select id="status" name="status" required>
+      {% for status in statuses %}
+      <option value="{{ status }}">{{ status }}</option>
+      {% endfor %}
+    </select>
+
+    <div class="grid-2">
+      <div>
+        <label for="techsmart_lines_completed">TechSmart lines completed (optional)</label>
+        <input id="techsmart_lines_completed" type="number" name="techsmart_lines_completed" min="0" />
+      </div>
+      <div>
+        <label for="techsmart_lines_expected">TechSmart lines expected (optional)</label>
+        <input id="techsmart_lines_expected" type="number" name="techsmart_lines_expected" min="0" />
+      </div>
+    </div>
+
+    <label for="student_code">Pasted student code</label>
+    <textarea id="student_code" name="student_code" rows="20" placeholder="Paste student code here..."></textarea>
+
+    <button type="submit">Grade Submission</button>
+  </form>
+</section>
+{% endblock %}
