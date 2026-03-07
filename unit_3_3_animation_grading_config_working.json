@@ -1,0 +1,2038 @@
+{
+  "course": "CS101 Coding in Python 1",
+  "unit": "3.3 Animation",
+  "grading_model": {
+    "unit_score_out_of": 100,
+    "unit_aggregation": "weighted_average_of_counted_assignments",
+    "attempt_detection": {
+      "meaningful_line_definition": "A non-blank, non-comment line that is not part of the untouched starter template (teacher-configurable)."
+    }
+  },
+  "assignments": [
+    {
+      "id": "3_3_warm_up_1_warmup1_solution_py",
+      "title": "3.3 Warm Up 1",
+      "file_name": "Warmup1_Solution.py",
+      "kind": "warmup",
+      "count_in_unit_grade_default": false,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      }
+    },
+    {
+      "id": "3_3_animation_instruction_py",
+      "title": "3.3 Animation",
+      "file_name": "Instruction.py",
+      "kind": "instruction",
+      "count_in_unit_grade_default": false,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      }
+    },
+    {
+      "id": "3_3_animating_shapes_technique1demo_py",
+      "title": "3.3 Animating Shapes",
+      "file_name": "Technique1Demo.py",
+      "kind": "demo",
+      "count_in_unit_grade_default": false,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      }
+    },
+    {
+      "id": "3_3_animating_shapes_1_technique1practice1_py",
+      "title": "3.3 Animating Shapes (1)",
+      "file_name": "Technique1Practice1.py",
+      "kind": "practice",
+      "count_in_unit_grade_default": true,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      },
+      "requirement_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "must_have_tokens": [
+          "frames",
+          "while",
+          "x",
+          "y"
+        ],
+        "must_have_any": [
+          [
+            "pygame.display.flip",
+            "pygame.display.update"
+          ]
+        ],
+        "must_have_wait_any": [
+          [
+            "pygame.time.wait",
+            "clock.tick"
+          ]
+        ],
+        "must_have_draw_any": [
+          [
+            "pygame.draw.circle",
+            "pygame.draw.line",
+            "pygame.draw.rect"
+          ]
+        ],
+        "coherence_guardrails": [
+          {
+            "name": "draw_inside_loop",
+            "rule": "If a required pygame.draw.* call appears only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "flip_inside_loop",
+            "rule": "If flip/update exists but only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "updated_pos_used_in_draw",
+            "rule": "If position variables (x/y/offset) are updated but never appear as arguments in a pygame.draw call, score cannot exceed 2 and may not count as meaningful attempt."
+          }
+        ],
+        "score3_minimums": [
+          "Animation loop (while) present",
+          "Display flip/update and timing control each frame",
+          "Required drawing call(s) present",
+          "Per-frame position/offset update present",
+          "Draw call uses updated position variables"
+        ]
+      },
+      "fill_zones": [
+        {
+          "name": "position_update",
+          "prompt_hints": [
+            "Add to",
+            "Subtract from",
+            "Update"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "\\b(x|y|offset|dx|dy)\\s*[-+]=\\s*\\d+\\b",
+            "\\b(x|y)\\s*=\\s*\\w+\\s*[-+]\\s*\\d+\\b"
+          ],
+          "anti_patterns": [
+            "^\\s*(x|y|offset)\\s*=\\s*0\\s*$"
+          ],
+          "notes": "Expect at least one per-frame position/offset change."
+        },
+        {
+          "name": "draw_shape",
+          "prompt_hints": [
+            "Draw",
+            "circle",
+            "shape"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.draw\\.(circle|rect|line)\\s*\\("
+          ],
+          "anti_patterns": [],
+          "notes": "Expect a pygame.draw call for the required shape(s)."
+        },
+        {
+          "name": "flip_and_wait",
+          "prompt_hints": [
+            "flip",
+            "wait"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.display\\.(flip|update)\\s*\\(\\s*\\)",
+            "pygame\\.time\\.wait\\s*\\(\\s*\\d+\\s*\\)",
+            "clock\\.tick\\s*\\(\\s*\\d+\\s*\\)"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect display update and frame delay."
+        }
+      ]
+    },
+    {
+      "id": "3_3_animating_shapes_2_technique1practice2_py",
+      "title": "3.3 Animating Shapes (2)",
+      "file_name": "Technique1Practice2.py",
+      "kind": "practice",
+      "count_in_unit_grade_default": true,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      },
+      "requirement_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "must_have_tokens": [
+          "frames",
+          "while",
+          "x",
+          "y"
+        ],
+        "must_have_any": [
+          [
+            "pygame.display.flip",
+            "pygame.display.update"
+          ]
+        ],
+        "must_have_wait_any": [
+          [
+            "pygame.time.wait",
+            "clock.tick"
+          ]
+        ],
+        "must_have_draw_any": [
+          [
+            "pygame.draw.circle",
+            "pygame.draw.line",
+            "pygame.draw.rect"
+          ]
+        ],
+        "coherence_guardrails": [
+          {
+            "name": "draw_inside_loop",
+            "rule": "If a required pygame.draw.* call appears only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "flip_inside_loop",
+            "rule": "If flip/update exists but only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "updated_pos_used_in_draw",
+            "rule": "If position variables (x/y/offset) are updated but never appear as arguments in a pygame.draw call, score cannot exceed 2 and may not count as meaningful attempt."
+          }
+        ],
+        "score3_minimums": [
+          "Animation loop (while) present",
+          "Display flip/update and timing control each frame",
+          "Required drawing call(s) present",
+          "Per-frame position/offset update present",
+          "Draw call uses updated position variables"
+        ]
+      },
+      "fill_zones": [
+        {
+          "name": "position_update",
+          "prompt_hints": [
+            "Add to",
+            "Subtract from",
+            "Update"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "\\b(x|y|offset|dx|dy)\\s*[-+]=\\s*\\d+\\b",
+            "\\b(x|y)\\s*=\\s*\\w+\\s*[-+]\\s*\\d+\\b"
+          ],
+          "anti_patterns": [
+            "^\\s*(x|y|offset)\\s*=\\s*0\\s*$"
+          ],
+          "notes": "Expect at least one per-frame position/offset change."
+        },
+        {
+          "name": "draw_shape",
+          "prompt_hints": [
+            "Draw",
+            "circle",
+            "shape"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.draw\\.(circle|rect|line)\\s*\\("
+          ],
+          "anti_patterns": [],
+          "notes": "Expect a pygame.draw call for the required shape(s)."
+        },
+        {
+          "name": "flip_and_wait",
+          "prompt_hints": [
+            "flip",
+            "wait"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.display\\.(flip|update)\\s*\\(\\s*\\)",
+            "pygame\\.time\\.wait\\s*\\(\\s*\\d+\\s*\\)",
+            "clock\\.tick\\s*\\(\\s*\\d+\\s*\\)"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect display update and frame delay."
+        }
+      ]
+    },
+    {
+      "id": "3_3_animating_rect_shapes_technique2demo_py",
+      "title": "3.3 Animating Rect Shapes",
+      "file_name": "Technique2Demo.py",
+      "kind": "demo",
+      "count_in_unit_grade_default": false,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      }
+    },
+    {
+      "id": "3_3_animating_rect_shapes_1_technique2practice1_py",
+      "title": "3.3 Animating Rect Shapes (1)",
+      "file_name": "Technique2Practice1.py",
+      "kind": "practice",
+      "count_in_unit_grade_default": true,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      },
+      "fill_zones": [
+        {
+          "name": "offset_update",
+          "prompt_hints": [
+            "Subtract from offset"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "\\boffset\\s*[-+]=\\s*2\\b",
+            "\\boffset\\s*=\\s*offset\\s*-\\s*2\\b"
+          ],
+          "anti_patterns": [
+            "^\\s*offset\\s*=\\s*0\\s*$"
+          ],
+          "notes": "Expect offset to change by -2 each frame."
+        },
+        {
+          "name": "apply_offset_to_rect",
+          "prompt_hints": [
+            "Use the offset to set the elevator rect"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "\\belevator_rect\\.(y|top)\\s*=\\s*.*\\boffset\\b",
+            "\\belevator_rect\\.(y|top)\\s*[-+]=\\s*.*"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect elevator rect y-position to be set/updated using offset."
+        },
+        {
+          "name": "draw_elevator_rect",
+          "prompt_hints": [
+            "Draw the elevator as a rectangle",
+            "Draw the elevator"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.draw\\.rect\\s*\\("
+          ],
+          "anti_patterns": [],
+          "notes": "Expect pygame.draw.rect usage to draw the elevator."
+        },
+        {
+          "name": "flip_and_wait",
+          "prompt_hints": [
+            "flip and wait for 40",
+            "flip and wait"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.display\\.(flip|update)\\s*\\(\\s*\\)",
+            "pygame\\.time\\.wait\\s*\\(\\s*40\\s*\\)",
+            "clock\\.tick\\s*\\(\\s*(24|25)\\s*\\)"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect per-frame display update and timing control."
+        }
+      ],
+      "requirement_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "must_have_tokens": [
+          "while",
+          "frames",
+          "offset",
+          "elevator_rect"
+        ],
+        "must_have_any": [
+          [
+            "pygame.display.flip",
+            "pygame.display.update"
+          ]
+        ],
+        "must_have_wait_any": [
+          [
+            "pygame.time.wait",
+            "clock.tick"
+          ]
+        ],
+        "must_have_draw_any": [
+          [
+            "pygame.draw.rect"
+          ]
+        ],
+        "coherence_guardrails": [
+          {
+            "name": "offset_used_with_rect",
+            "rule": "If 'offset' is updated but never used on a line referencing 'elevator_rect', score cannot exceed 2 and may not count as meaningful attempt."
+          },
+          {
+            "name": "draw_inside_loop",
+            "rule": "If pygame.draw.rect appears only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "flip_inside_loop",
+            "rule": "If flip/update exists but only outside the main while-loop, score cannot exceed 2."
+          }
+        ],
+        "score3_minimums": [
+          "Animation loop (while) present",
+          "Offset updated each frame (e.g., -2 per frame)",
+          "Offset applied to elevator_rect position",
+          "Elevator drawn via pygame.draw.rect",
+          "Display flip/update and ~40ms wait each frame"
+        ]
+      }
+    },
+    {
+      "id": "3_3_animating_rect_shapes_2_technique2practice2_py",
+      "title": "3.3 Animating Rect Shapes (2)",
+      "file_name": "Technique2Practice2.py",
+      "kind": "practice",
+      "count_in_unit_grade_default": true,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      },
+      "requirement_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "must_have_tokens": [
+          "frames",
+          "offset",
+          "rect",
+          "while"
+        ],
+        "must_have_any": [
+          [
+            "pygame.display.flip",
+            "pygame.display.update"
+          ]
+        ],
+        "must_have_wait_any": [
+          [
+            "pygame.time.wait",
+            "clock.tick"
+          ]
+        ],
+        "must_have_draw_any": [
+          [
+            "pygame.draw.rect"
+          ]
+        ],
+        "coherence_guardrails": [
+          {
+            "name": "draw_inside_loop",
+            "rule": "If a required pygame.draw.* call appears only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "flip_inside_loop",
+            "rule": "If flip/update exists but only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "offset_used_with_rect",
+            "rule": "If 'offset' is updated but never used on a line that also references a *_rect variable, score cannot exceed 2 and may not count as meaningful attempt."
+          }
+        ],
+        "score3_minimums": [
+          "Animation loop (while) present",
+          "Display flip/update and timing control each frame",
+          "Required drawing call(s) present",
+          "Offset updated each frame",
+          "Offset applied to a Rect position",
+          "Rectangle drawn"
+        ]
+      },
+      "fill_zones": [
+        {
+          "name": "offset_update",
+          "prompt_hints": [
+            "offset",
+            "Add",
+            "Subtract"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "\\boffset\\s*[-+]=\\s*\\d+\\b",
+            "\\boffset\\s*=\\s*offset\\s*[-+]\\s*\\d+\\b"
+          ],
+          "anti_patterns": [
+            "^\\s*offset\\s*=\\s*0\\s*$"
+          ],
+          "notes": "Expect offset to change each frame."
+        },
+        {
+          "name": "apply_offset_to_rect",
+          "prompt_hints": [
+            "rect",
+            "Use the offset"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "\\b\\w+_rect\\.(x|y|top|left)\\s*=\\s*.*\\boffset\\b",
+            "\\b\\w+_rect\\.(x|y|top|left)\\s*[-+]=\\s*.*"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect rect position to be updated using offset."
+        },
+        {
+          "name": "draw_rect",
+          "prompt_hints": [
+            "Draw",
+            "rectangle"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.draw\\.rect\\s*\\("
+          ],
+          "anti_patterns": [],
+          "notes": "Expect pygame.draw.rect call."
+        },
+        {
+          "name": "flip_and_wait",
+          "prompt_hints": [
+            "flip",
+            "wait"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.display\\.(flip|update)\\s*\\(\\s*\\)",
+            "pygame\\.time\\.wait\\s*\\(\\s*\\d+\\s*\\)",
+            "clock\\.tick\\s*\\(\\s*\\d+\\s*\\)"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect display update and frame delay."
+        }
+      ]
+    },
+    {
+      "id": "3_3_adjust_animation_speed_technique3demo_py",
+      "title": "3.3 Adjust Animation Speed",
+      "file_name": "Technique3Demo.py",
+      "kind": "demo",
+      "count_in_unit_grade_default": false,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      }
+    },
+    {
+      "id": "3_3_adjust_animation_speed_1_technique3practice1_py",
+      "title": "3.3 Adjust Animation Speed (1)",
+      "file_name": "Technique3Practice1.py",
+      "kind": "practice",
+      "count_in_unit_grade_default": true,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      },
+      "requirement_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "must_have_tokens": [
+          "frames",
+          "while"
+        ],
+        "must_have_any": [
+          [
+            "pygame.display.flip",
+            "pygame.display.update"
+          ]
+        ],
+        "must_have_wait_any": [
+          [
+            "pygame.time.wait",
+            "clock.tick"
+          ]
+        ],
+        "must_have_draw_any": [
+          [
+            "pygame.draw.circle",
+            "pygame.draw.rect",
+            "pygame.draw.line"
+          ]
+        ],
+        "coherence_guardrails": [
+          {
+            "name": "draw_inside_loop",
+            "rule": "If a required pygame.draw.* call appears only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "flip_inside_loop",
+            "rule": "If flip/update exists but only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "timing_inside_loop",
+            "rule": "If wait/tick is only outside the main while-loop, score cannot exceed 2."
+          }
+        ],
+        "score3_minimums": [
+          "Animation loop (while) present",
+          "Display flip/update and timing control each frame",
+          "Required drawing call(s) present",
+          "Frame timing control present (wait or tick)"
+        ]
+      },
+      "fill_zones": [
+        {
+          "name": "timing_control",
+          "prompt_hints": [
+            "wait",
+            "tick",
+            "speed",
+            "milliseconds"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.time\\.wait\\s*\\(\\s*\\d+\\s*\\)",
+            "clock\\.tick\\s*\\(\\s*\\d+\\s*\\)"
+          ],
+          "anti_patterns": [
+            "pygame\\.time\\.wait\\s*\\(\\s*0\\s*\\)"
+          ],
+          "notes": "Expect explicit frame timing control."
+        },
+        {
+          "name": "speed_variable_or_change",
+          "prompt_hints": [
+            "speed",
+            "delay",
+            "wait"
+          ],
+          "required": false,
+          "expected_patterns": [
+            "\\b(speed|delay|wait|ms)\\b",
+            "\\b\\d+\\b"
+          ],
+          "anti_patterns": [],
+          "notes": "Optional: expects a variable or adjustment affecting animation speed."
+        },
+        {
+          "name": "flip",
+          "prompt_hints": [
+            "flip",
+            "update"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.display\\.(flip|update)\\s*\\(\\s*\\)"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect display update each frame."
+        }
+      ]
+    },
+    {
+      "id": "3_3_adjust_animation_speed_2_technique3practice2_py",
+      "title": "3.3 Adjust Animation Speed (2)",
+      "file_name": "Technique3Practice2.py",
+      "kind": "practice",
+      "count_in_unit_grade_default": true,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      },
+      "requirement_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "must_have_tokens": [
+          "frames",
+          "while"
+        ],
+        "must_have_any": [
+          [
+            "pygame.display.flip",
+            "pygame.display.update"
+          ]
+        ],
+        "must_have_wait_any": [
+          [
+            "pygame.time.wait",
+            "clock.tick"
+          ]
+        ],
+        "must_have_draw_any": [
+          [
+            "pygame.draw.circle",
+            "pygame.draw.rect",
+            "pygame.draw.line"
+          ]
+        ],
+        "coherence_guardrails": [
+          {
+            "name": "draw_inside_loop",
+            "rule": "If a required pygame.draw.* call appears only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "flip_inside_loop",
+            "rule": "If flip/update exists but only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "timing_inside_loop",
+            "rule": "If wait/tick is only outside the main while-loop, score cannot exceed 2."
+          }
+        ],
+        "score3_minimums": [
+          "Animation loop (while) present",
+          "Display flip/update and timing control each frame",
+          "Required drawing call(s) present",
+          "Frame timing control present (wait or tick)"
+        ]
+      },
+      "fill_zones": [
+        {
+          "name": "timing_control",
+          "prompt_hints": [
+            "wait",
+            "tick",
+            "speed",
+            "milliseconds"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.time\\.wait\\s*\\(\\s*\\d+\\s*\\)",
+            "clock\\.tick\\s*\\(\\s*\\d+\\s*\\)"
+          ],
+          "anti_patterns": [
+            "pygame\\.time\\.wait\\s*\\(\\s*0\\s*\\)"
+          ],
+          "notes": "Expect explicit frame timing control."
+        },
+        {
+          "name": "speed_variable_or_change",
+          "prompt_hints": [
+            "speed",
+            "delay",
+            "wait"
+          ],
+          "required": false,
+          "expected_patterns": [
+            "\\b(speed|delay|wait|ms)\\b",
+            "\\b\\d+\\b"
+          ],
+          "anti_patterns": [],
+          "notes": "Optional: expects a variable or adjustment affecting animation speed."
+        },
+        {
+          "name": "flip",
+          "prompt_hints": [
+            "flip",
+            "update"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.display\\.(flip|update)\\s*\\(\\s*\\)"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect display update each frame."
+        }
+      ]
+    },
+    {
+      "id": "3_3_backgrounds_and_trails_technique4demo_py",
+      "title": "3.3 Backgrounds and Trails",
+      "file_name": "Technique4Demo.py",
+      "kind": "demo",
+      "count_in_unit_grade_default": false,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      }
+    },
+    {
+      "id": "3_3_backgrounds_and_trails_1_technique4practice1_py",
+      "title": "3.3 Backgrounds and Trails (1)",
+      "file_name": "Technique4Practice1.py",
+      "kind": "practice",
+      "count_in_unit_grade_default": true,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      },
+      "requirement_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "must_have_tokens": [
+          "frames",
+          "while"
+        ],
+        "must_have_any": [
+          [
+            "pygame.display.flip",
+            "pygame.display.update"
+          ]
+        ],
+        "must_have_wait_any": [
+          [
+            "pygame.time.wait",
+            "clock.tick"
+          ]
+        ],
+        "must_have_draw_any": [
+          [
+            "pygame.draw.circle",
+            "pygame.draw.rect",
+            "pygame.draw.line"
+          ]
+        ],
+        "coherence_guardrails": [
+          {
+            "name": "draw_inside_loop",
+            "rule": "If a required pygame.draw.* call appears only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "flip_inside_loop",
+            "rule": "If flip/update exists but only outside the main while-loop, score cannot exceed 2."
+          }
+        ],
+        "notes": "For trails assignments, background fill presence/absence should be checked against lesson prompt; use assignment-specific toggle 'expect_fill_each_frame' to enforce if desired.",
+        "score3_minimums": [
+          "Animation loop (while) present",
+          "Display flip/update and timing control each frame",
+          "Required drawing call(s) present",
+          "Background handling matches lesson (fill each frame or intentionally omit for trails)"
+        ]
+      },
+      "fill_zones": [
+        {
+          "name": "background_fill",
+          "prompt_hints": [
+            "fill",
+            "background",
+            "trail"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "\\bwindow\\.fill\\s*\\(",
+            "\\bscreen\\.fill\\s*\\("
+          ],
+          "anti_patterns": [],
+          "notes": "Expect background fill call when required (or intentionally omitted for trails depending on prompt)."
+        },
+        {
+          "name": "trail_behavior",
+          "prompt_hints": [
+            "trail",
+            "leave",
+            "do not fill",
+            "keep background"
+          ],
+          "required": false,
+          "expected_patterns": [
+            "#.*trail",
+            "\\bframes\\b"
+          ],
+          "anti_patterns": [],
+          "notes": "Used to distinguish 'with trails' vs 'no trails' variants via configuration if needed."
+        },
+        {
+          "name": "flip_and_wait",
+          "prompt_hints": [
+            "flip",
+            "wait"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.display\\.(flip|update)\\s*\\(\\s*\\)",
+            "pygame\\.time\\.wait\\s*\\(\\s*\\d+\\s*\\)",
+            "clock\\.tick\\s*\\(\\s*\\d+\\s*\\)"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect display update and timing."
+        }
+      ]
+    },
+    {
+      "id": "3_3_backgrounds_and_trails_2_technique4practice2_py",
+      "title": "3.3 Backgrounds and Trails (2)",
+      "file_name": "Technique4Practice2.py",
+      "kind": "practice",
+      "count_in_unit_grade_default": true,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      },
+      "requirement_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "must_have_tokens": [
+          "frames",
+          "while"
+        ],
+        "must_have_any": [
+          [
+            "pygame.display.flip",
+            "pygame.display.update"
+          ]
+        ],
+        "must_have_wait_any": [
+          [
+            "pygame.time.wait",
+            "clock.tick"
+          ]
+        ],
+        "must_have_draw_any": [
+          [
+            "pygame.draw.circle",
+            "pygame.draw.rect",
+            "pygame.draw.line"
+          ]
+        ],
+        "coherence_guardrails": [
+          {
+            "name": "draw_inside_loop",
+            "rule": "If a required pygame.draw.* call appears only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "flip_inside_loop",
+            "rule": "If flip/update exists but only outside the main while-loop, score cannot exceed 2."
+          }
+        ],
+        "notes": "For trails assignments, background fill presence/absence should be checked against lesson prompt; use assignment-specific toggle 'expect_fill_each_frame' to enforce if desired.",
+        "score3_minimums": [
+          "Animation loop (while) present",
+          "Display flip/update and timing control each frame",
+          "Required drawing call(s) present",
+          "Background handling matches lesson (fill each frame or intentionally omit for trails)"
+        ]
+      },
+      "fill_zones": [
+        {
+          "name": "background_fill",
+          "prompt_hints": [
+            "fill",
+            "background",
+            "trail"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "\\bwindow\\.fill\\s*\\(",
+            "\\bscreen\\.fill\\s*\\("
+          ],
+          "anti_patterns": [],
+          "notes": "Expect background fill call when required (or intentionally omitted for trails depending on prompt)."
+        },
+        {
+          "name": "trail_behavior",
+          "prompt_hints": [
+            "trail",
+            "leave",
+            "do not fill",
+            "keep background"
+          ],
+          "required": false,
+          "expected_patterns": [
+            "#.*trail",
+            "\\bframes\\b"
+          ],
+          "anti_patterns": [],
+          "notes": "Used to distinguish 'with trails' vs 'no trails' variants via configuration if needed."
+        },
+        {
+          "name": "flip_and_wait",
+          "prompt_hints": [
+            "flip",
+            "wait"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.display\\.(flip|update)\\s*\\(\\s*\\)",
+            "pygame\\.time\\.wait\\s*\\(\\s*\\d+\\s*\\)",
+            "clock\\.tick\\s*\\(\\s*\\d+\\s*\\)"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect display update and timing."
+        }
+      ]
+    },
+    {
+      "id": "3_3_stick_dance_random_stickdancerandom_solution_py",
+      "title": "3.3 Stick Dance: Random",
+      "file_name": "StickDanceRandom_solution.py",
+      "kind": "exercise",
+      "count_in_unit_grade_default": true,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      },
+      "requirement_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "must_have_tokens": [
+          "frames",
+          "while"
+        ],
+        "must_have_any": [
+          [
+            "pygame.display.flip",
+            "pygame.display.update"
+          ]
+        ],
+        "must_have_wait_any": [
+          [
+            "pygame.time.wait",
+            "clock.tick"
+          ]
+        ],
+        "must_have_draw_any": [
+          [
+            "pygame.draw.line",
+            "pygame.draw.circle",
+            "pygame.draw.rect"
+          ]
+        ],
+        "coherence_guardrails": [
+          {
+            "name": "draw_inside_loop",
+            "rule": "If a required pygame.draw.* call appears only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "flip_inside_loop",
+            "rule": "If flip/update exists but only outside the main while-loop, score cannot exceed 2."
+          }
+        ],
+        "score3_minimums": [
+          "Animation loop (while) present",
+          "Display flip/update and timing control each frame",
+          "Required drawing call(s) present",
+          "Motion logic present (random or smooth)",
+          "Stick figure drawn with lines/circles"
+        ]
+      },
+      "fill_zones": [
+        {
+          "name": "random_or_smooth_motion",
+          "prompt_hints": [
+            "random",
+            "smooth",
+            "randint",
+            "velocity"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "random\\.(randint|choice)\\s*\\(",
+            "\\b(dx|dy)\\s*=\\s*",
+            "\\b(x|y)\\s*[-+]=\\s*\\w+"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect motion logic (random or smooth) for stick dance."
+        },
+        {
+          "name": "draw_stick_figure",
+          "prompt_hints": [
+            "stick",
+            "Draw"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.draw\\.(line|circle)\\s*\\("
+          ],
+          "anti_patterns": [],
+          "notes": "Expect drawing lines/circles for stick figure."
+        },
+        {
+          "name": "flip_and_wait",
+          "prompt_hints": [
+            "flip",
+            "wait"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.display\\.(flip|update)\\s*\\(\\s*\\)",
+            "pygame\\.time\\.wait\\s*\\(\\s*\\d+\\s*\\)",
+            "clock\\.tick\\s*\\(\\s*\\d+\\s*\\)"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect frame update and timing."
+        }
+      ]
+    },
+    {
+      "id": "3_3_healthful_ufo_healthfulufo_solution_py",
+      "title": "3.3 Healthful UFO",
+      "file_name": "HealthfulUFO_solution.py",
+      "kind": "exercise",
+      "count_in_unit_grade_default": true,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      },
+      "requirement_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "must_have_tokens": [
+          "frames",
+          "while"
+        ],
+        "must_have_any": [
+          [
+            "pygame.display.flip",
+            "pygame.display.update"
+          ]
+        ],
+        "must_have_wait_any": [
+          [
+            "pygame.time.wait",
+            "clock.tick"
+          ]
+        ],
+        "must_have_draw_any": [
+          [
+            "pygame.draw.circle",
+            "pygame.draw.rect",
+            "pygame.draw.ellipse",
+            "pygame.draw.polygon"
+          ]
+        ],
+        "coherence_guardrails": [
+          {
+            "name": "draw_inside_loop",
+            "rule": "If a required pygame.draw.* call appears only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "flip_inside_loop",
+            "rule": "If flip/update exists but only outside the main while-loop, score cannot exceed 2."
+          }
+        ],
+        "score3_minimums": [
+          "Animation loop (while) present",
+          "Display flip/update and timing control each frame",
+          "Required drawing call(s) present",
+          "UFO composed of multiple shapes",
+          "Movement logic present"
+        ]
+      },
+      "fill_zones": [
+        {
+          "name": "ufo_draw",
+          "prompt_hints": [
+            "UFO",
+            "draw"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.draw\\.(ellipse|circle|rect|polygon)\\s*\\("
+          ],
+          "anti_patterns": [],
+          "notes": "Expect drawing multiple shapes composing the UFO."
+        },
+        {
+          "name": "movement_logic",
+          "prompt_hints": [
+            "move",
+            "offset",
+            "x",
+            "y",
+            "velocity"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "\\b(x|y)\\s*[-+]=\\s*\\d+",
+            "\\boffset\\s*[-+]=\\s*\\d+",
+            "\\b(dx|dy)\\s*=\\s*"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect movement across frames."
+        },
+        {
+          "name": "flip_and_wait",
+          "prompt_hints": [
+            "flip",
+            "wait"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.display\\.(flip|update)\\s*\\(\\s*\\)",
+            "pygame\\.time\\.wait\\s*\\(\\s*\\d+\\s*\\)",
+            "clock\\.tick\\s*\\(\\s*\\d+\\s*\\)"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect frame update and timing."
+        }
+      ]
+    },
+    {
+      "id": "3_3_warm_up_2_warmup2_solution_py",
+      "title": "3.3 Warm Up 2",
+      "file_name": "Warmup2_Solution.py",
+      "kind": "warmup",
+      "count_in_unit_grade_default": false,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      }
+    },
+    {
+      "id": "3_3_stick_dance_smooth_stickdancesmooth_solution_py",
+      "title": "3.3 Stick Dance: Smooth",
+      "file_name": "StickDanceSmooth_Solution.py",
+      "kind": "exercise",
+      "count_in_unit_grade_default": true,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      },
+      "requirement_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "must_have_tokens": [
+          "frames",
+          "while"
+        ],
+        "must_have_any": [
+          [
+            "pygame.display.flip",
+            "pygame.display.update"
+          ]
+        ],
+        "must_have_wait_any": [
+          [
+            "pygame.time.wait",
+            "clock.tick"
+          ]
+        ],
+        "must_have_draw_any": [
+          [
+            "pygame.draw.line",
+            "pygame.draw.circle",
+            "pygame.draw.rect"
+          ]
+        ],
+        "coherence_guardrails": [
+          {
+            "name": "draw_inside_loop",
+            "rule": "If a required pygame.draw.* call appears only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "flip_inside_loop",
+            "rule": "If flip/update exists but only outside the main while-loop, score cannot exceed 2."
+          }
+        ],
+        "score3_minimums": [
+          "Animation loop (while) present",
+          "Display flip/update and timing control each frame",
+          "Required drawing call(s) present",
+          "Motion logic present (random or smooth)",
+          "Stick figure drawn with lines/circles"
+        ]
+      },
+      "fill_zones": [
+        {
+          "name": "random_or_smooth_motion",
+          "prompt_hints": [
+            "random",
+            "smooth",
+            "randint",
+            "velocity"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "random\\.(randint|choice)\\s*\\(",
+            "\\b(dx|dy)\\s*=\\s*",
+            "\\b(x|y)\\s*[-+]=\\s*\\w+"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect motion logic (random or smooth) for stick dance."
+        },
+        {
+          "name": "draw_stick_figure",
+          "prompt_hints": [
+            "stick",
+            "Draw"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.draw\\.(line|circle)\\s*\\("
+          ],
+          "anti_patterns": [],
+          "notes": "Expect drawing lines/circles for stick figure."
+        },
+        {
+          "name": "flip_and_wait",
+          "prompt_hints": [
+            "flip",
+            "wait"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.display\\.(flip|update)\\s*\\(\\s*\\)",
+            "pygame\\.time\\.wait\\s*\\(\\s*\\d+\\s*\\)",
+            "clock\\.tick\\s*\\(\\s*\\d+\\s*\\)"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect frame update and timing."
+        }
+      ]
+    },
+    {
+      "id": "3_3_warm_up_3_warmup3_solution_py",
+      "title": "3.3 Warm Up 3",
+      "file_name": "Warmup3_Solution.py",
+      "kind": "warmup",
+      "count_in_unit_grade_default": false,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      }
+    },
+    {
+      "id": "3_3_bouncing_ball_bouncingball_solution_py",
+      "title": "3.3 Bouncing Ball",
+      "file_name": "BouncingBall_solution.py",
+      "kind": "exercise",
+      "count_in_unit_grade_default": true,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      },
+      "requirement_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "must_have_tokens": [
+          "frames",
+          "while"
+        ],
+        "must_have_any": [
+          [
+            "pygame.display.flip",
+            "pygame.display.update"
+          ]
+        ],
+        "must_have_wait_any": [
+          [
+            "pygame.time.wait",
+            "clock.tick"
+          ]
+        ],
+        "must_have_draw_any": [
+          [
+            "pygame.draw.circle"
+          ]
+        ],
+        "coherence_guardrails": [
+          {
+            "name": "draw_inside_loop",
+            "rule": "If a required pygame.draw.* call appears only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "flip_inside_loop",
+            "rule": "If flip/update exists but only outside the main while-loop, score cannot exceed 2."
+          }
+        ],
+        "score3_minimums": [
+          "Animation loop (while) present",
+          "Display flip/update and timing control each frame",
+          "Required drawing call(s) present",
+          "Ball moves each frame",
+          "Bounce logic reverses direction at boundaries",
+          "Ball drawn as circle"
+        ]
+      },
+      "fill_zones": [
+        {
+          "name": "ball_motion",
+          "prompt_hints": [
+            "ball",
+            "x",
+            "y",
+            "dx",
+            "dy",
+            "velocity"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "\\b(x|y)\\s*[-+]=\\s*\\w+",
+            "\\b(dx|dy)\\s*=\\s*[-+]?\\d+",
+            "\\b(x|y)\\s*[-+]=\\s*\\d+"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect ball position updates each frame."
+        },
+        {
+          "name": "bounce_logic",
+          "prompt_hints": [
+            "bounce",
+            "if",
+            "edge",
+            "wall"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "\\bif\\b.*(x|y).*",
+            "\\b(dx|dy)\\s*=\\s*-\\s*(dx|dy)\\b",
+            "\\b(dx|dy)\\s*\\*=\\s*-1\\b"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect boundary checks and velocity reversal."
+        },
+        {
+          "name": "draw_ball",
+          "prompt_hints": [
+            "draw",
+            "circle"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.draw\\.circle\\s*\\("
+          ],
+          "anti_patterns": [],
+          "notes": "Expect pygame.draw.circle for the ball."
+        },
+        {
+          "name": "flip_and_wait",
+          "prompt_hints": [
+            "flip",
+            "wait"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.display\\.(flip|update)\\s*\\(\\s*\\)",
+            "pygame\\.time\\.wait\\s*\\(\\s*\\d+\\s*\\)",
+            "clock\\.tick\\s*\\(\\s*\\d+\\s*\\)"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect frame update and timing."
+        }
+      ]
+    },
+    {
+      "id": "3_3_warm_up_4_warmup4_solution_py",
+      "title": "3.3 Warm Up 4",
+      "file_name": "Warmup4_Solution.py",
+      "kind": "warmup",
+      "count_in_unit_grade_default": false,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      }
+    },
+    {
+      "id": "3_3_3_3_code_your_own_cyo3_3_solution_py",
+      "title": "3.3 3.3 Code Your Own",
+      "file_name": "CYO3_3_Solution.py",
+      "kind": "exercise",
+      "count_in_unit_grade_default": true,
+      "weight": 1.0,
+      "rubric_scale": {
+        "0": "blank/no meaningful attempt",
+        "1": "meaningful attempt but not submitted or minimal",
+        "2": "submitted but incorrect/buggy",
+        "3": "correct"
+      },
+      "rubric_to_points_default": {
+        "0": 0,
+        "1": 50,
+        "2": 75,
+        "3": 100
+      },
+      "tests": {
+        "stdin_cases": [],
+        "stdout_expectations": [],
+        "notes": "Populate with input/output cases OR structural checks. For pygame animations, consider static checks (required variables/loops/wait) + limited run smoke-test."
+      },
+      "static_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "required_tokens": [],
+        "forbidden_tokens": [],
+        "notes": "Use AST/token checks to confirm key concepts (e.g., loop, offset, pygame.display.flip, pygame.time.wait)."
+      },
+      "requirement_checks": {
+        "required_imports": [
+          "pygame"
+        ],
+        "must_have_tokens": [
+          "frames",
+          "while"
+        ],
+        "must_have_any": [
+          [
+            "pygame.display.flip",
+            "pygame.display.update"
+          ]
+        ],
+        "must_have_wait_any": [
+          [
+            "pygame.time.wait",
+            "clock.tick"
+          ]
+        ],
+        "must_have_draw_any": [
+          [
+            "pygame.draw.circle",
+            "pygame.draw.rect",
+            "pygame.draw.line",
+            "pygame.draw.ellipse",
+            "pygame.draw.polygon"
+          ]
+        ],
+        "coherence_guardrails": [
+          {
+            "name": "draw_inside_loop",
+            "rule": "If a required pygame.draw.* call appears only outside the main while-loop, score cannot exceed 2."
+          },
+          {
+            "name": "flip_inside_loop",
+            "rule": "If flip/update exists but only outside the main while-loop, score cannot exceed 2."
+          }
+        ],
+        "score3_minimums": [
+          "Animation loop (while) present",
+          "Display flip/update and timing control each frame",
+          "Required drawing call(s) present",
+          "Custom animation includes motion",
+          "At least one drawing call",
+          "Runs without errors"
+        ]
+      },
+      "fill_zones": [
+        {
+          "name": "custom_draw",
+          "prompt_hints": [
+            "Create",
+            "Draw",
+            "your own"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.draw\\.\\w+\\s*\\("
+          ],
+          "anti_patterns": [],
+          "notes": "Expect at least one pygame.draw call."
+        },
+        {
+          "name": "custom_motion",
+          "prompt_hints": [
+            "animate",
+            "move",
+            "offset",
+            "frames"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "\\b(x|y)\\s*[-+]=\\s*\\w+|\\b(x|y)\\s*[-+]=\\s*\\d+",
+            "\\boffset\\s*[-+]=\\s*\\d+",
+            "\\b(dx|dy)\\s*="
+          ],
+          "anti_patterns": [],
+          "notes": "Expect animation/motion logic."
+        },
+        {
+          "name": "flip_and_wait",
+          "prompt_hints": [
+            "flip",
+            "wait"
+          ],
+          "required": true,
+          "expected_patterns": [
+            "pygame\\.display\\.(flip|update)\\s*\\(\\s*\\)",
+            "pygame\\.time\\.wait\\s*\\(\\s*\\d+\\s*\\)",
+            "clock\\.tick\\s*\\(\\s*\\d+\\s*\\)"
+          ],
+          "anti_patterns": [],
+          "notes": "Expect frame update and timing."
+        }
+      ]
+    }
+  ],
+  "checker_policy": {
+    "ignore_lines_complete_except_zero": true,
+    "turned_in_zero_lines_scores": 0,
+    "meaningful_attempt": {
+      "requires_fill_zone_match": true,
+      "min_zones_matched_default": 2,
+      "zone_match_rules": [
+        "Must contain at least one non-comment, non-blank Python statement within the zone",
+        "Must match at least one expected pattern for that zone (regex/token/AST-based)"
+      ],
+      "coherence_guardrails": [
+        "If a required variable is defined but never used in required context, do not count as meaningful",
+        "If draw/update calls exist but are outside the main loop when loop is required, score cannot exceed 2"
+      ]
+    },
+    "smoke_run": {
+      "enabled": true,
+      "timeout_seconds": 1.0,
+      "notes": "For pygame, prefer static checks; smoke-run is optional and should run in a sandbox with display disabled when possible."
+    }
+  }
+}
