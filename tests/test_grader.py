@@ -186,3 +186,132 @@ def test_weighted_unit_grade_calculation():
         UnitGradeEntry("c", "C", 0, include=False, weight=1.0),
     ]
     assert calculate_unit_grade(entries, {"a", "b"}) == 83.33
+
+
+def _assignment_animating_shapes_2():
+    return _assignment("3_3_animating_shapes_2_technique1practice2_py")
+
+
+def test_animating_shapes_2_true_zero_no_relevant_attempt():
+    assignment = _assignment_animating_shapes_2()
+    code = """
+print('hello world')
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.STARTED_NOT_SUBMITTED, student_code=code),
+    )
+    assert result.rubric_score == 0
+
+
+def test_animating_shapes_2_true_one_early_offset_attempt():
+    assignment = _assignment_animating_shapes_2()
+    code = """
+import pygame
+frames = 0
+offset = 0
+while frames < 100:
+    offset += 1
+    frames += 1
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.TURNED_IN, student_code=code),
+    )
+    assert result.rubric_score == 1
+
+
+def test_animating_shapes_2_true_two_meaningful_but_incomplete():
+    assignment = _assignment_animating_shapes_2()
+    code = """
+import pygame
+frames = 0
+offset = 0
+left = 100
+right = 200
+top = 50
+bottom = 150
+
+while frames < 100:
+    offset += 2
+    point1 = (left, top + offset)
+    point2 = (right, top + offset)
+    pygame.draw.polygon(window, (255, 0, 0), [point1, point2])
+    pygame.display.flip()
+    pygame.time.wait(40)
+    frames += 1
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.TURNED_IN, student_code=code),
+    )
+    assert result.rubric_score == 2
+
+
+def test_animating_shapes_2_true_three_complete_polygon_solution():
+    assignment = _assignment_animating_shapes_2()
+    code = """
+import pygame
+window = pygame.display.set_mode((800, 600))
+frames = 0
+offset = 0
+left = 100
+right = 200
+top = 50
+bottom = 150
+
+while frames < 100:
+    offset += 4
+    top_left = (left + offset, top)
+    top_right = (right, top + offset)
+    bottom_right = (right - offset, bottom)
+    bottom_left = (left, bottom - offset)
+
+    pygame.draw.polygon(window, (255, 0, 0), [top_left, top_right, bottom_right, bottom_left])
+    pygame.display.flip()
+    pygame.time.wait(40)
+    frames += 1
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.TURNED_IN, student_code=code),
+    )
+    assert result.rubric_score == 3
+    assert result.points == 100
+    assert result.unmet_fill_zones == []
+    assert result.coherence_guardrail_failures == []
+
+
+def test_animating_shapes_2_true_three_with_points_list_variable():
+    assignment = _assignment_animating_shapes_2()
+    code = """
+import pygame
+window = pygame.display.set_mode((800, 600))
+frames = 0
+offset = 0
+left = 100
+right = 200
+top = 50
+bottom = 150
+
+while frames < 100:
+    offset = offset + 4
+    p_a = (offset + left, top)
+    p_b = (right, offset + top)
+    p_c = (right + -offset, bottom)
+    p_d = (left, bottom + -offset)
+    points = [p_a, p_b, p_c, p_d]
+
+    pygame.draw.polygon(window, (255, 0, 0), points)
+    pygame.display.flip()
+    pygame.time.wait(40)
+    frames += 1
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.TURNED_IN, student_code=code),
+    )
+    assert result.rubric_score == 3
+    assert result.points == 100
+    assert result.unmet_fill_zones == []
+    assert result.coherence_guardrail_failures == []
