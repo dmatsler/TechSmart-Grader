@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>Unit Grade Calculator</h2>
+  <p><strong>Current unit grade:</strong> <span class="score-badge">{{ unit_grade }}</span></p>
+
+  <form action="/unit-grade" method="post">
+    <table>
+      <thead>
+        <tr>
+          <th>Include</th>
+          <th>Assignment</th>
+          <th>Points</th>
+          <th>Weight</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+        <tr>
+          <td><input type="checkbox" name="include" value="{{ entry.assignment_id }}" {% if entry.assignment_id in included_ids %}checked{% endif %}></td>
+          <td>{{ entry.assignment_label }}</td>
+          <td>{{ entry.points }}</td>
+          <td>{{ entry.weight }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">No graded assignments in this session yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit">Recalculate Unit Grade</button>
+  </form>
+
+  <form action="/reset" method="post" class="top-gap">
+    <button type="submit" class="secondary">Reset Session Grades</button>
+  </form>
+</section>
+{% endblock %}

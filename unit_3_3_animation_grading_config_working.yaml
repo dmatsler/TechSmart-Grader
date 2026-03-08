@@ -194,6 +194,7 @@ assignments:
   kind: practice
   count_in_unit_grade_default: true
   weight: 1.0
+  min_zones_matched_default: 3
   rubric_scale:
     '0': blank/no meaningful attempt
     '1': meaningful attempt but not submitted or minimal
@@ -222,8 +223,11 @@ assignments:
     must_have_tokens:
     - frames
     - while
-    - x
-    - y
+    - offset
+    - left
+    - right
+    - top
+    - bottom
     must_have_any:
     - - pygame.display.flip
       - pygame.display.update
@@ -231,9 +235,7 @@ assignments:
     - - pygame.time.wait
       - clock.tick
     must_have_draw_any:
-    - - pygame.draw.circle
-      - pygame.draw.line
-      - pygame.draw.rect
+    - - pygame.draw.polygon
     coherence_guardrails:
     - name: draw_inside_loop
       rule: If a required pygame.draw.* call appears only outside the main while-loop,
@@ -242,38 +244,59 @@ assignments:
       rule: If flip/update exists but only outside the main while-loop, score cannot
         exceed 2.
     - name: updated_pos_used_in_draw
-      rule: If position variables (x/y/offset) are updated but never appear as arguments
-        in a pygame.draw call, score cannot exceed 2 and may not count as meaningful
-        attempt.
+      rule: If offset is updated but never used to build polygon points that are passed
+        to pygame.draw.polygon, score cannot exceed 2.
     score3_minimums:
     - Animation loop (while) present
+    - Offset updated each frame
+    - Four point tuples created using left/right/top/bottom and offset
+    - pygame.draw.polygon uses those points
     - Display flip/update and timing control each frame
-    - Required drawing call(s) present
-    - Per-frame position/offset update present
-    - Draw call uses updated position variables
   fill_zones:
-  - name: position_update
+  - name: offset_setup_and_update
     prompt_hints:
-    - Add to
-    - Subtract from
-    - Update
+    - offset
+    - create offset
+    - update offset
     required: true
+    attempt_patterns:
+    - \b\w*offset\w*\s*=\s*[-+]?\d+\b
+    - \b\w*offset\w*\s*[-+]=\s*[-+]?\d+\b
+    - \b\w*offset\w*\s*=\s*\w*offset\w*\s*[-+]\s*\d+\b
     expected_patterns:
-    - \b(x|y|offset|dx|dy)\s*[-+]=\s*\d+\b
-    - \b(x|y)\s*=\s*\w+\s*[-+]\s*\d+\b
-    anti_patterns:
-    - ^\s*(x|y|offset)\s*=\s*0\s*$
-    notes: Expect at least one per-frame position/offset change.
-  - name: draw_shape
-    prompt_hints:
-    - Draw
-    - circle
-    - shape
-    required: true
-    expected_patterns:
-    - pygame\.draw\.(circle|rect|line)\s*\(
+    - \b\w*offset\w*\s*[-+]=\s*\d+\b
+    - \b\w*offset\w*\s*=\s*\w*offset\w*\s*[-+]\s*\d+\b
     anti_patterns: []
-    notes: Expect a pygame.draw call for the required shape(s).
+    notes: Expect offset variable setup followed by per-frame update.
+  - name: polygon_points
+    prompt_hints:
+    - left
+    - right
+    - top
+    - bottom
+    - point tuple
+    required: true
+    attempt_patterns:
+    - \b(left|right|top|bottom)\b
+    - \bpoint\w*\s*=\s*\(.*\)\s*$
+    expected_patterns:
+    - \bpoint\w*\s*=\s*\(\s*left\s*,\s*top\s*[-+]\s*\w*offset\w*\s*\)
+    - \bpoint\w*\s*=\s*\(\s*right\s*,\s*top\s*[-+]\s*\w*offset\w*\s*\)
+    - \bpoint\w*\s*=\s*\(\s*right\s*,\s*bottom\s*[-+]\s*\w*offset\w*\s*\)
+    - \bpoint\w*\s*=\s*\(\s*left\s*,\s*bottom\s*[-+]\s*\w*offset\w*\s*\)
+    anti_patterns: []
+    notes: Expect four points derived from left/right/top/bottom and offset.
+  - name: draw_polygon
+    prompt_hints:
+    - polygon
+    - draw
+    required: true
+    attempt_patterns:
+    - pygame\.draw\.polygon\s*\(
+    expected_patterns:
+    - pygame\.draw\.polygon\s*\([^\n]*\[(point\w*|\([^\]]+\))
+    anti_patterns: []
+    notes: Expect pygame.draw.polygon using the constructed points.
   - name: flip_and_wait
     prompt_hints:
     - flip
