@@ -1,0 +1,446 @@
+from __future__ import annotations
+
+import ast
+import re
+from dataclasses import dataclass
+
+from app.models import AssignmentConfig, GradingInput, GradingResult, SubmissionStatus, ZoneMatch
+from app.utils import find_main_loop_block, has_non_comment_statement, regex_any_match, strip_comment_blank_lines, token_present
+
+TARGET_ASSIGNMENT_POINT_PATTERN = "3_3_animating_shapes_1_technique1practice1_py"
+TARGET_ASSIGNMENT_POLYGON_PATTERN = "3_3_animating_shapes_2_technique1practice2_py"
+
+
+@dataclass
+class AnalysisSummary:
+    zone_matches: list[ZoneMatch]
+    requirement_failures: list[str]
+    coherence_failures: list[str]
+    relevant_zone_match_count: int
+    meaningful_zone_match_count: int
+    meaningful_attempt: bool
+
+
+def _extract_point_vars_derived_from_offset(code: str) -> list[str]:
+    pattern = re.compile(r"\b([A-Za-z_]\w*)\s*=\s*\([^\n\)]*\b\w*offset\w*\b[^\n\)]*\)", flags=re.MULTILINE)
+    return [match.group(1) for match in pattern.finditer(code)]
+
+
+def _extract_point_collection_vars(point_vars: list[str], code: str) -> list[str]:
+    if not point_vars:
+        return []
+    collections: list[str] = []
+    for var in point_vars:
+        for match in re.finditer(rf"\b([A-Za-z_]\w*)\s*=\s*\[[^\n]*\b{re.escape(var)}\b[^\n]*\]", code):
+            collections.append(match.group(1))
+    return list(dict.fromkeys(collections))
+
+
+def _polygon_call_uses_var(code: str, var_name: str) -> bool:
+    pattern = rf"pygame\.draw\.polygon\s*\([^\n]*\b{re.escape(var_name)}\b[^\n]*\)"
+    try:
+        return regex_any_match([pattern], code)
+    except re.error:
+        return "pygame.draw.polygon" in code and var_name in code
+
+
+def _matches_point_based_movement_pattern(assignment: AssignmentConfig, zone_name: str, code: str) -> bool:
+    if assignment.id != TARGET_ASSIGNMENT_POINT_PATTERN or zone_name != "position_update":
+        return False
+
+    offset_updated = regex_any_match([
+        r"\b\w*offset\w*\s*[-+]=\s*\d+",
+        r"\b\w*offset\w*\s*=\s*\w*offset\w*\s*[-+]\s*\d+",
+    ], code)
+    if not offset_updated:
+        return False
+
+    point_vars = _extract_point_vars_derived_from_offset(code)
+    if not point_vars:
+        return False
+
+    return any(
+        regex_any_match([rf"pygame\.draw\.(line|circle|rect)\s*\([^\n]*\b{re.escape(point_var)}\b"], code)
+        for point_var in point_vars
+    )
+
+
+def _linear_name_coeffs(node: ast.AST) -> dict[str, int] | None:
+    if isinstance(node, ast.Name):
+        return {node.id: 1}
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return {}
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        inner = _linear_name_coeffs(node.operand)
+        if inner is None:
+            return None
+        return {name: -coef for name, coef in inner.items()}
+    if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub)):
+        left = _linear_name_coeffs(node.left)
+        right = _linear_name_coeffs(node.right)
+        if left is None or right is None:
+            return None
+        if isinstance(node.op, ast.Sub):
+            right = {name: -coef for name, coef in right.items()}
+        merged: dict[str, int] = dict(left)
+        for name, coef in right.items():
+            merged[name] = merged.get(name, 0) + coef
+        return {name: coef for name, coef in merged.items() if coef != 0}
+    return None
+
+
+def _extract_clockwise_rotation_point_roles(code: str) -> dict[str, str]:
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return {}
+
+    roles: dict[str, str] = {}
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not isinstance(target, ast.Name):
+            continue
+        if not isinstance(node.value, ast.Tuple) or len(node.value.elts) != 2:
+            continue
+
+        x_coeffs = _linear_name_coeffs(node.value.elts[0])
+        y_coeffs = _linear_name_coeffs(node.value.elts[1])
+        if x_coeffs is None or y_coeffs is None:
+            continue
+
+        if x_coeffs.get("left") == 1 and x_coeffs.get("offset") == 1 and y_coeffs == {"top": 1}:
+            roles.setdefault("top_edge", target.id)
+        elif x_coeffs == {"right": 1} and y_coeffs.get("top") == 1 and y_coeffs.get("offset") == 1:
+            roles.setdefault("right_edge", target.id)
+        elif x_coeffs.get("right") == 1 and x_coeffs.get("offset") == -1 and y_coeffs == {"bottom": 1}:
+            roles.setdefault("bottom_edge", target.id)
+        elif x_coeffs == {"left": 1} and y_coeffs.get("bottom") == 1 and y_coeffs.get("offset") == -1:
+            roles.setdefault("left_edge", target.id)
+
+    return roles
+
+
+def _polygon_call_uses_clockwise_points(code: str) -> bool:
+    roles = _extract_clockwise_rotation_point_roles(code)
+    if len(roles) < 4:
+        return False
+
+    required_vars = set(roles.values())
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return False
+
+    list_assignments: dict[str, set[str]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not isinstance(target, ast.Name):
+            continue
+        if isinstance(node.value, (ast.List, ast.Tuple)):
+            names = {elt.id for elt in node.value.elts if isinstance(elt, ast.Name)}
+            if names:
+                list_assignments[target.id] = names
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute) or node.func.attr != "polygon":
+            continue
+        func_value = node.func.value
+        if not isinstance(func_value, ast.Attribute) or func_value.attr != "draw":
+            continue
+        module = func_value.value
+        if not isinstance(module, ast.Name) or module.id != "pygame":
+            continue
+        if len(node.args) < 3:
+            continue
+
+        points_arg = node.args[2]
+        if isinstance(points_arg, (ast.List, ast.Tuple)):
+            names = {elt.id for elt in points_arg.elts if isinstance(elt, ast.Name)}
+            if required_vars.issubset(names):
+                return True
+        if isinstance(points_arg, ast.Name):
+            referenced = list_assignments.get(points_arg.id, set())
+            if required_vars.issubset(referenced):
+                return True
+
+    return False
+
+
+def _has_four_side_points_with_offset(code: str) -> bool:
+    return len(_extract_clockwise_rotation_point_roles(code)) == 4
+
+
+def _matches_polygon_side_point_pattern(assignment: AssignmentConfig, zone_name: str, code: str) -> bool:
+    if assignment.id != TARGET_ASSIGNMENT_POLYGON_PATTERN:
+        return False
+
+    if zone_name == "polygon_points":
+        return _has_four_side_points_with_offset(code)
+
+    if zone_name == "draw_polygon":
+        return _polygon_call_uses_clockwise_points(code)
+
+    return False
+
+
+def _check_fill_zones(assignment: AssignmentConfig, code: str) -> list[ZoneMatch]:
+    matches: list[ZoneMatch] = []
+    code_lines = strip_comment_blank_lines(code)
+
+    for zone in assignment.fill_zones:
+        attempt_patterns = zone.attempt_patterns or zone.expected_patterns
+        anti_hit = regex_any_match(zone.anti_patterns, code) if zone.anti_patterns else False
+
+        matched_attempt_line = False
+        matched_expected_line = False
+        for line in code_lines:
+            if attempt_patterns and regex_any_match(attempt_patterns, line):
+                matched_attempt_line = True
+            if zone.expected_patterns and regex_any_match(zone.expected_patterns, line):
+                matched_expected_line = True
+
+        if _matches_point_based_movement_pattern(assignment, zone.name, code):
+            matched_attempt_line = True
+            matched_expected_line = True
+
+        if _matches_polygon_side_point_pattern(assignment, zone.name, code):
+            matched_attempt_line = True
+            matched_expected_line = True
+
+        if assignment.id == TARGET_ASSIGNMENT_POLYGON_PATTERN and zone.name == "polygon_points":
+            matched_expected_line = _has_four_side_points_with_offset(code)
+            matched_attempt_line = matched_attempt_line or regex_any_match(
+                [r"\b[A-Za-z_]\w*\s*=\s*\([^\n]*\)", r"\b(left|right|top|bottom)\b"],
+                code,
+            )
+
+        meaningful_line = matched_attempt_line and not anti_hit
+        matched = meaningful_line and (matched_attempt_line or matched_expected_line)
+
+        detail = ""
+        if anti_hit:
+            detail = "Anti-pattern detected"
+        elif not matched_attempt_line:
+            detail = "No assignment-relevant line found"
+        elif not matched_expected_line:
+            detail = "Attempt pattern matched, expected pattern missing"
+
+        matches.append(
+            ZoneMatch(
+                name=zone.name,
+                matched=matched,
+                matched_expected=matched_expected_line,
+                matched_attempt=matched_attempt_line,
+                anti_pattern_hit=anti_hit,
+                has_meaningful_line=meaningful_line,
+                details=detail,
+            )
+        )
+    return matches
+
+
+def _check_requirements(assignment: AssignmentConfig, code: str) -> list[str]:
+    failures: list[str] = []
+    req = assignment.requirement_checks
+
+    for imp in req.required_imports:
+        if f"import {imp}" not in code and f"from {imp}" not in code:
+            failures.append(f"Missing required import: {imp}")
+
+    for token in req.must_have_tokens:
+        if not token_present(token, code):
+            failures.append(f"Missing required token: {token}")
+
+    def check_any(groups: list[list[str]], label: str) -> None:
+        for options in groups:
+            if not any(token_present(option, code) for option in options):
+                failures.append(f"Missing one of {label}: {', '.join(options)}")
+
+    check_any(req.must_have_any, "required calls")
+    check_any(req.must_have_wait_any, "timing calls")
+    check_any(req.must_have_draw_any, "draw calls")
+    return failures
+
+
+def _guardrail_names(assignment: AssignmentConfig) -> set[str]:
+    return {item.get("name", "") for item in assignment.requirement_checks.coherence_guardrails}
+
+
+def _check_coherence_guardrails(assignment: AssignmentConfig, code: str) -> list[str]:
+    failures: list[str] = []
+    guardrails = _guardrail_names(assignment)
+    loop_block = find_main_loop_block(code)
+
+    if "draw_inside_loop" in guardrails:
+        if "pygame.draw" in code and "pygame.draw" not in loop_block:
+            failures.append("Draw call appears only outside main while-loop")
+
+    if "flip_inside_loop" in guardrails:
+        has_flip = "pygame.display.flip" in code or "pygame.display.update" in code
+        in_loop_flip = "pygame.display.flip" in loop_block or "pygame.display.update" in loop_block
+        if has_flip and not in_loop_flip:
+            failures.append("Display flip/update appears only outside main while-loop")
+
+    if "updated_pos_used_in_draw" in guardrails:
+        updated = regex_any_match([
+            r"\b(x|y|offset|dx|dy)\s*[-+]=\s*\d+",
+            r"\b\w*offset\w*\s*[-+]=\s*\d+",
+            r"\b\w*offset\w*\s*=\s*\w*offset\w*\s*[-+]\s*\d+",
+        ], code)
+        draw_line_with_position = regex_any_match([r"pygame\.draw\.(circle|rect|line)\s*\([^\n]*(\bx\b|\by\b|\boffset\b)"], code)
+        draw_uses_point_from_offset = False
+
+        if assignment.id in {TARGET_ASSIGNMENT_POINT_PATTERN, TARGET_ASSIGNMENT_POLYGON_PATTERN}:
+            point_vars = _extract_point_vars_derived_from_offset(code)
+            point_collection_vars = _extract_point_collection_vars(point_vars, code)
+            draw_uses_point_from_offset = any(
+                regex_any_match([rf"pygame\.draw\.(line|circle|rect|polygon)\s*\([^\n]*\b{re.escape(point_var)}\b"], code)
+                for point_var in point_vars
+            ) or any(_polygon_call_uses_var(code, collection_var) for collection_var in point_collection_vars)
+
+        if updated and not (draw_line_with_position or draw_uses_point_from_offset):
+            failures.append("Position/offset updated but never used in draw context")
+
+    if "offset_used_with_rect" in guardrails:
+        updated_offset = regex_any_match([r"\boffset\s*[-+]=\s*\d+", r"\boffset\s*=\s*offset\s*[-+]\s*\d+"], code)
+        offset_on_rect_line = regex_any_match([
+            r"\b\w*_rect\.(x|y|top|left)\s*=\s*[^\n]*\boffset\b",
+            r"\belevator_rect\.(x|y|top|left)\s*=\s*[^\n]*\boffset\b",
+        ], code)
+        if updated_offset and not offset_on_rect_line:
+            failures.append("Offset updated but not applied to rect position")
+
+    return failures
+
+
+def analyze_submission(assignment: AssignmentConfig, code: str) -> AnalysisSummary:
+    zone_matches = _check_fill_zones(assignment, code)
+    meaningful_matches = [z for z in zone_matches if z.matched]
+    relevant_matches = [z for z in zone_matches if z.matched_attempt and z.has_meaningful_line and not z.anti_pattern_hit]
+
+    required_zones = [z for z in assignment.fill_zones if z.required]
+    required_zone_target = assignment.min_zones_matched_default
+    if required_zones:
+        required_zone_target = max(required_zone_target, min(2, len(required_zones)))
+
+    meaningful_attempt = has_non_comment_statement(code) and len(meaningful_matches) >= required_zone_target
+
+    return AnalysisSummary(
+        zone_matches=zone_matches,
+        requirement_failures=_check_requirements(assignment, code),
+        coherence_failures=_check_coherence_guardrails(assignment, code),
+        relevant_zone_match_count=len(relevant_matches),
+        meaningful_zone_match_count=len(meaningful_matches),
+        meaningful_attempt=meaningful_attempt,
+    )
+
+
+def grade_submission(assignment: AssignmentConfig, payload: GradingInput) -> GradingResult:
+    code = payload.student_code or ""
+
+    if (
+        payload.status == SubmissionStatus.TURNED_IN
+        and payload.techsmart_lines_completed == 0
+        and (payload.techsmart_lines_expected or 0) > 0
+    ):
+        return _to_result(assignment, payload, 0, f"Turned in with 0/{payload.techsmart_lines_expected} lines, so this counts as no attempt.", [], [], [], [])
+
+    if payload.status == SubmissionStatus.NOT_STARTED:
+        return _to_result(assignment, payload, 0, "Assignment marked not started, so score is 0.", [], [], [], [])
+
+    analysis = analyze_submission(assignment, code)
+    matched_names = [z.name for z in analysis.zone_matches if z.matched_expected]
+    unmet_names = [z.name for z in analysis.zone_matches if z.matched_expected is False]
+
+    if payload.status == SubmissionStatus.STARTED_NOT_SUBMITTED:
+        score = 1 if analysis.relevant_zone_match_count >= 1 else 0
+        explanation = (
+            "Relevant attempt detected, but the assignment is still incomplete and was not submitted."
+            if score == 1
+            else "Started but no assignment-specific fill-zone attempt was detected."
+        )
+        return _to_result(assignment, payload, score, explanation, matched_names, unmet_names, analysis.coherence_failures, analysis.requirement_failures)
+
+    if analysis.relevant_zone_match_count == 0:
+        return _to_result(
+            assignment,
+            payload,
+            1,
+            "Turned in, but no relevant assignment-specific attempt was detected.",
+            matched_names,
+            unmet_names,
+            analysis.coherence_failures,
+            analysis.requirement_failures,
+        )
+
+    if assignment.id == TARGET_ASSIGNMENT_POLYGON_PATTERN and analysis.relevant_zone_match_count >= 1 and analysis.meaningful_zone_match_count < 2:
+        return _to_result(
+            assignment,
+            payload,
+            1,
+            "Relevant early attempt detected (offset setup/update), but key polygon movement pieces are still missing.",
+            matched_names,
+            unmet_names,
+            analysis.coherence_failures,
+            analysis.requirement_failures,
+        )
+
+    syntax_error = False
+    if code.strip():
+        try:
+            ast.parse(code)
+        except SyntaxError:
+            syntax_error = True
+
+    score = 3
+    explanation = "Program includes the needed loop, drawing call, timing control, and required logic."
+    if not analysis.meaningful_attempt or syntax_error or analysis.requirement_failures or analysis.coherence_failures or unmet_names:
+        score = 2
+        if syntax_error:
+            explanation = "Meaningful attempt found, but code has syntax issues."
+        elif analysis.coherence_failures:
+            explanation = analysis.coherence_failures[0]
+        else:
+            explanation = "Relevant attempt detected in required zones, but key requirements were missing."
+
+    return _to_result(
+        assignment,
+        payload,
+        score,
+        explanation,
+        matched_names,
+        unmet_names,
+        analysis.coherence_failures,
+        analysis.requirement_failures,
+    )
+
+
+def _to_result(
+    assignment: AssignmentConfig,
+    payload: GradingInput,
+    score: int,
+    explanation: str,
+    matched: list[str],
+    unmet: list[str],
+    coherence: list[str],
+    requirements: list[str],
+) -> GradingResult:
+    return GradingResult(
+        assignment_id=assignment.id,
+        assignment_title=assignment.title,
+        status=payload.status,
+        rubric_score=score,
+        points=assignment.rubric_to_points_default.get(score, 0),
+        explanation=explanation,
+        matched_fill_zones=matched,
+        unmet_fill_zones=unmet,
+        coherence_guardrail_failures=coherence,
+        requirement_check_failures=requirements,
+    )
