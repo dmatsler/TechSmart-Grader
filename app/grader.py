@@ -83,8 +83,7 @@ def _collect_loop_motion_vars_and_rect_usage(code: str) -> tuple[set[str], set[s
         if not hasattr(node, "lineno") or node.lineno >= main_loop.lineno:
             continue
         if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            if isinstance(node.value, ast.Constant) and isinstance(node.value.value, (int, float)):
-                initialized_before_loop.add(node.targets[0].id)
+            initialized_before_loop.add(node.targets[0].id)
 
     updated_in_loop: set[str] = set()
     used_on_elevator_y: set[str] = set()
@@ -104,6 +103,19 @@ def _collect_loop_motion_vars_and_rect_usage(code: str) -> tuple[set[str], set[s
             target = node.targets[0]
             if isinstance(target.value, ast.Name) and target.value.id == "elevator_rect" and target.attr in {"y", "top"}:
                 used_on_elevator_y.update({sub.id for sub in ast.walk(node.value) if isinstance(sub, ast.Name)})
+
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            target = node.targets[0]
+            if target.id == "elevator_rect" and isinstance(node.value, ast.Call):
+                func = node.value.func
+                if (
+                    isinstance(func, ast.Attribute)
+                    and isinstance(func.value, ast.Name)
+                    and func.value.id == "pygame"
+                    and func.attr == "Rect"
+                    and len(node.value.args) >= 2
+                ):
+                    used_on_elevator_y.update({sub.id for sub in ast.walk(node.value.args[1]) if isinstance(sub, ast.Name)})
 
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
             if node.func.attr in {"flip", "update"}:
