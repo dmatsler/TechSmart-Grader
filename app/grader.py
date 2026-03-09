@@ -90,12 +90,16 @@ def _linear_name_coeffs(node: ast.AST) -> dict[str, int] | None:
 
 
 def _extract_clockwise_rotation_point_roles(code: str) -> dict[str, str]:
+    motion_vars = _extract_initialized_then_updated_vars(code)
+    if not motion_vars:
+        return {}
+
     try:
         tree = ast.parse(code)
     except SyntaxError:
         return {}
 
-    roles: dict[str, str] = {}
+    roles_by_motion: dict[str, dict[str, str]] = {var: {} for var in motion_vars}
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
@@ -111,16 +115,84 @@ def _extract_clockwise_rotation_point_roles(code: str) -> dict[str, str]:
         if x_coeffs is None or y_coeffs is None:
             continue
 
-        if x_coeffs.get("left") == 1 and x_coeffs.get("offset") == 1 and y_coeffs == {"top": 1}:
-            roles.setdefault("top_edge", target.id)
-        elif x_coeffs == {"right": 1} and y_coeffs.get("top") == 1 and y_coeffs.get("offset") == 1:
-            roles.setdefault("right_edge", target.id)
-        elif x_coeffs.get("right") == 1 and x_coeffs.get("offset") == -1 and y_coeffs == {"bottom": 1}:
-            roles.setdefault("bottom_edge", target.id)
-        elif x_coeffs == {"left": 1} and y_coeffs.get("bottom") == 1 and y_coeffs.get("offset") == -1:
-            roles.setdefault("left_edge", target.id)
+        for motion_var, roles in roles_by_motion.items():
+            if (
+                x_coeffs.get("left") == 1
+                and x_coeffs.get(motion_var) == 1
+                and set(x_coeffs).issubset({"left", motion_var})
+                and y_coeffs == {"top": 1}
+            ):
+                roles.setdefault("top_edge", target.id)
+            elif (
+                x_coeffs == {"right": 1}
+                and y_coeffs.get("top") == 1
+                and y_coeffs.get(motion_var) == 1
+                and set(y_coeffs).issubset({"top", motion_var})
+            ):
+                roles.setdefault("right_edge", target.id)
+            elif (
+                x_coeffs.get("right") == 1
+                and x_coeffs.get(motion_var) == -1
+                and set(x_coeffs).issubset({"right", motion_var})
+                and y_coeffs == {"bottom": 1}
+            ):
+                roles.setdefault("bottom_edge", target.id)
+            elif (
+                x_coeffs == {"left": 1}
+                and y_coeffs.get("bottom") == 1
+                and y_coeffs.get(motion_var) == -1
+                and set(y_coeffs).issubset({"bottom", motion_var})
+            ):
+                roles.setdefault("left_edge", target.id)
 
-    return roles
+    for roles in roles_by_motion.values():
+        if len(roles) == 4:
+            return roles
+
+    return {}
+
+
+def _extract_initialized_then_updated_vars(code: str) -> set[str]:
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return set()
+
+    while_nodes = [node for node in ast.walk(tree) if isinstance(node, ast.While)]
+    if not while_nodes:
+        return set()
+
+    main_loop = min(while_nodes, key=lambda node: node.lineno)
+    initialized_before_loop: set[str] = set()
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) and node.lineno < main_loop.lineno:
+            initialized_before_loop.add(node.targets[0].id)
+
+    updated_in_loop: set[str] = set()
+    for node in ast.walk(main_loop):
+        if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name) and isinstance(node.op, (ast.Add, ast.Sub)):
+            updated_in_loop.add(node.target.id)
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            target = node.targets[0].id
+            if _is_self_increment_or_decrement(target, node.value):
+                updated_in_loop.add(target)
+
+    return initialized_before_loop & updated_in_loop
+
+
+def _is_self_increment_or_decrement(name: str, expr: ast.AST) -> bool:
+    if not isinstance(expr, ast.BinOp) or not isinstance(expr.op, (ast.Add, ast.Sub)):
+        return False
+
+    left_has_name = isinstance(expr.left, ast.Name) and expr.left.id == name
+    right_has_name = isinstance(expr.right, ast.Name) and expr.right.id == name
+
+    if not (left_has_name or right_has_name):
+        return False
+
+    non_name_side = expr.right if left_has_name else expr.left
+    return not (isinstance(non_name_side, ast.Constant) and non_name_side.value == 0)
 
 
 def _polygon_call_uses_clockwise_points(code: str) -> bool:
@@ -184,6 +256,9 @@ def _matches_polygon_side_point_pattern(assignment: AssignmentConfig, zone_name:
     if zone_name == "polygon_points":
         return _has_four_side_points_with_offset(code)
 
+    if zone_name == "offset_setup_and_update":
+        return bool(_extract_initialized_then_updated_vars(code))
+
     if zone_name == "draw_polygon":
         return _polygon_call_uses_clockwise_points(code)
 
@@ -221,6 +296,10 @@ def _check_fill_zones(assignment: AssignmentConfig, code: str) -> list[ZoneMatch
                 code,
             )
 
+        if assignment.id == TARGET_ASSIGNMENT_POLYGON_PATTERN and zone.name == "offset_setup_and_update":
+            matched_expected_line = bool(_extract_initialized_then_updated_vars(code))
+            matched_attempt_line = matched_attempt_line or matched_expected_line
+
         meaningful_line = matched_attempt_line and not anti_hit
         matched = meaningful_line and (matched_attempt_line or matched_expected_line)
 
@@ -255,6 +334,9 @@ def _check_requirements(assignment: AssignmentConfig, code: str) -> list[str]:
             failures.append(f"Missing required import: {imp}")
 
     for token in req.must_have_tokens:
+        if assignment.id == TARGET_ASSIGNMENT_POLYGON_PATTERN and token == "offset":
+            if _extract_initialized_then_updated_vars(code):
+                continue
         if not token_present(token, code):
             failures.append(f"Missing required token: {token}")
 
