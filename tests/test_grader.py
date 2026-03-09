@@ -321,6 +321,29 @@ while frames < 100:
     assert result.coherence_guardrail_failures == []
 
 
+
+def test_animating_rect_shapes_1_real_starter_score_three_submission_scores_three():
+    assignment = _assignment_animating_rect_shapes_1()
+    code = '"""\nLESSON: 3.3 - Animation\nTECHNIQUE 2: Animating Rect Shapes\nPRACTICE 1\n"""\n\nimport pygame\npygame.init()\n\nwindow = pygame.display.set_mode([400, 400])\n\nsky_color = (180, 200, 240)\nground_color = (100, 150, 100)\nbuilding_color = (50, 50, 50)\nelevator_color = (100, 100, 100)\n\nground_rect = pygame.Rect(0, 300, 400, 100)\nbuilding_rect = pygame.Rect(250, 20, 100, 280)\n\nelevator_start = 240\nelevator_rect = pygame.Rect(240, elevator_start, 40, 60)\n\n# Declare an offset for the elevator\nelevator_shift = 0\n\nframes = 0\nwhile frames < 100:\n\n    # Subtract from offset\n    elevator_shift -= 2\n\n    # Use the offset to set the elevator rect\'s y\n    elevator_rect = pygame.Rect(240, elevator_start + elevator_shift, 40, 60)\n\n    window.fill(sky_color)\n    pygame.draw.rect(window, ground_color, ground_rect)\n    pygame.draw.rect(window, building_color, building_rect)\n\n    # Draw the elevator\n    pygame.draw.rect(window, elevator_color, elevator_rect)\n\n    # Flip and wait every frame\n    pygame.display.flip()\n    pygame.time.wait(40)\n\n    frames += 1\n\n\n# Turn in your Coding Exercise.\n'
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.TURNED_IN, student_code=code),
+    )
+    assert result.rubric_score == 3
+    assert result.points == 100
+
+
+def test_animating_rect_shapes_1_real_starter_true_zero_submission_scores_zero():
+    assignment = _assignment_animating_rect_shapes_1()
+    code = '"""\nLESSON: 3.3 - Animation\nTECHNIQUE 2: Animating Rect Shapes\nPRACTICE 1\n"""\n\nimport pygame\npygame.init()\n\nwindow = pygame.display.set_mode([400, 400])\n\nsky_color = (180, 200, 240)\nground_color = (100, 150, 100)\nbuilding_color = (50, 50, 50)\nelevator_color = (100, 100, 100)\n\nground_rect = pygame.Rect(0, 300, 400, 100)\nbuilding_rect = pygame.Rect(250, 20, 100, 280)\n\nelevator_start = 240\nelevator_rect = pygame.Rect(240, elevator_start, 40, 60)\n\n# Declare an offset for the elevator\n\n\nframes = 0\nwhile frames < 100:\n\n    # Subtract from offset\n    \n\n    # Use the offset to set the elevator rect\'s y\n\n\n    window.fill(sky_color)\n    pygame.draw.rect(window, ground_color, ground_rect)\n    pygame.draw.rect(window, building_color, building_rect)\n\n    # Draw the elevator\n    \n\n    # Flip and wait every frame\n\n\n\n    frames += 1\n\n\n# Turn in your Coding Exercise.\n'
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.TURNED_IN, student_code=code),
+    )
+    assert result.rubric_score == 0
+    assert "draw_elevator_rect" in result.unmet_fill_zones
+
+
 def test_animating_rect_shapes_1_true_three_custom_offset_variable_scores_three():
     assignment = _assignment_animating_rect_shapes_1()
     code = """
