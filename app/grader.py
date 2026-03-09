@@ -84,6 +84,8 @@ def _collect_loop_motion_vars_and_rect_usage(code: str) -> tuple[set[str], set[s
             continue
         if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
             initialized_before_loop.add(node.targets[0].id)
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            initialized_before_loop.add(node.target.id)
 
     updated_in_loop: set[str] = set()
     used_on_elevator_y: set[str] = set()
@@ -101,6 +103,11 @@ def _collect_loop_motion_vars_and_rect_usage(code: str) -> tuple[set[str], set[s
 
         if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Attribute):
             target = node.targets[0]
+            if isinstance(target.value, ast.Name) and target.value.id == "elevator_rect" and target.attr in {"y", "top"}:
+                used_on_elevator_y.update({sub.id for sub in ast.walk(node.value) if isinstance(sub, ast.Name)})
+
+        if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Attribute):
+            target = node.target
             if isinstance(target.value, ast.Name) and target.value.id == "elevator_rect" and target.attr in {"y", "top"}:
                 used_on_elevator_y.update({sub.id for sub in ast.walk(node.value) if isinstance(sub, ast.Name)})
 
@@ -133,7 +140,9 @@ def _collect_loop_motion_vars_and_rect_usage(code: str) -> tuple[set[str], set[s
             if node.func.attr == "rect":
                 if isinstance(node.func.value, ast.Attribute) and isinstance(node.func.value.value, ast.Name):
                     if node.func.value.value.id == "pygame" and node.func.value.attr == "draw":
-                        if any(isinstance(arg, ast.Name) and arg.id == "elevator_rect" for arg in node.args):
+                        rect_arg_is_elevator = len(node.args) >= 3 and isinstance(node.args[2], ast.Name) and node.args[2].id == "elevator_rect"
+                        rect_kw_is_elevator = any(kw.arg == "rect" and isinstance(kw.value, ast.Name) and kw.value.id == "elevator_rect" for kw in node.keywords)
+                        if rect_arg_is_elevator or rect_kw_is_elevator:
                             elevator_drawn = True
 
     motion_vars = {name for name in (initialized_before_loop & updated_in_loop) if name not in {"frames", "frame", "i"}}
