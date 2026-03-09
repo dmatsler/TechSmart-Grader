@@ -192,6 +192,10 @@ def _assignment_animating_shapes_2():
     return _assignment("3_3_animating_shapes_2_technique1practice2_py")
 
 
+def _assignment_animating_rect_shapes_1():
+    return _assignment("3_3_animating_rect_shapes_1_technique2practice1_py")
+
+
 def test_animating_shapes_2_true_zero_no_relevant_attempt():
     assignment = _assignment_animating_shapes_2()
     code = """
@@ -315,3 +319,101 @@ while frames < 100:
     assert result.points == 100
     assert result.unmet_fill_zones == []
     assert result.coherence_guardrail_failures == []
+
+
+def test_animating_rect_shapes_1_true_three_custom_offset_variable_scores_three():
+    assignment = _assignment_animating_rect_shapes_1()
+    code = """
+import pygame
+window = pygame.display.set_mode((800, 600))
+frames = 0
+elevator_start = 320
+elevator_rect = pygame.Rect(350, elevator_start, 50, 70)
+ele_off = 0
+
+while frames < 100:
+    ele_off -= 2
+    elevator_rect.y = elevator_start + ele_off
+
+    window.fill((120, 180, 255))
+    pygame.draw.rect(window, (50, 50, 50), pygame.Rect(0, 500, 800, 100))
+    pygame.draw.rect(window, (130, 130, 130), pygame.Rect(300, 100, 180, 420))
+    pygame.draw.rect(window, (255, 0, 0), elevator_rect)
+
+    pygame.display.flip()
+    pygame.time.wait(40)
+    frames += 1
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.TURNED_IN, student_code=code),
+    )
+    assert result.rubric_score == 3
+    assert result.points == 100
+
+
+def test_animating_rect_shapes_1_true_two_wrong_rect_target_scores_two_for_correct_reason():
+    assignment = _assignment_animating_rect_shapes_1()
+    code = """
+import pygame
+window = pygame.display.set_mode((800, 600))
+frames = 0
+elevator_start = 320
+elevator_rect = pygame.Rect(350, elevator_start, 50, 70)
+car_offset = 0
+car_rect = pygame.Rect(100, 450, 120, 60)
+
+while frames < 100:
+    car_offset -= 2
+    car_rect.y = 450 + car_offset
+
+    window.fill((120, 180, 255))
+    pygame.draw.rect(window, (255, 0, 0), elevator_rect)
+    pygame.display.flip()
+    pygame.time.wait(40)
+    frames += 1
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.TURNED_IN, student_code=code),
+    )
+    assert result.rubric_score == 2
+    assert "Offset updated but not applied to rect position" in result.coherence_guardrail_failures
+
+
+def test_animating_rect_shapes_1_true_one_scores_one():
+    assignment = _assignment_animating_rect_shapes_1()
+    code = """
+import pygame
+frames = 0
+temp_move = 0
+while frames < 100:
+    temp_move -= 2
+    frames += 1
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.TURNED_IN, student_code=code),
+    )
+    assert result.rubric_score == 1
+
+
+def test_animating_rect_shapes_1_template_only_scores_zero():
+    assignment = _assignment_animating_rect_shapes_1()
+    code = """
+import pygame
+window = pygame.display.set_mode((800, 600))
+frames = 0
+while frames < 100:
+    window.fill((120, 180, 255))
+    pygame.draw.rect(window, ground_color, ground_rect)
+    pygame.draw.rect(window, building_color, building_rect)
+    pygame.display.flip()
+    pygame.time.wait(40)
+    frames += 1
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.TURNED_IN, student_code=code),
+    )
+    assert result.rubric_score == 0
