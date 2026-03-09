@@ -9,6 +9,7 @@ from app.utils import find_main_loop_block, has_non_comment_statement, regex_any
 
 TARGET_ASSIGNMENT_POINT_PATTERN = "3_3_animating_shapes_1_technique1practice1_py"
 TARGET_ASSIGNMENT_POLYGON_PATTERN = "3_3_animating_shapes_2_technique1practice2_py"
+TARGET_ASSIGNMENT_RECT_PATTERN = "3_3_animating_rect_shapes_1_technique2practice1_py"
 
 
 @dataclass
@@ -63,6 +64,86 @@ def _matches_point_based_movement_pattern(assignment: AssignmentConfig, zone_nam
         regex_any_match([rf"pygame\.draw\.(line|circle|rect)\s*\([^\n]*\b{re.escape(point_var)}\b"], code)
         for point_var in point_vars
     )
+
+
+def _collect_loop_motion_vars_and_rect_usage(code: str) -> tuple[set[str], set[str], bool, bool, bool]:
+    """Return motion vars and whether they are used for elevator movement + drawing/timing in loop."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return set(), set(), False, False, False
+
+    while_nodes = [node for node in ast.walk(tree) if isinstance(node, ast.While)]
+    if not while_nodes:
+        return set(), set(), False, False, False
+    main_loop = min(while_nodes, key=lambda node: node.lineno)
+
+    initialized_before_loop: set[str] = set()
+    for node in ast.walk(tree):
+        if not hasattr(node, "lineno") or node.lineno >= main_loop.lineno:
+            continue
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            if isinstance(node.value, ast.Constant) and isinstance(node.value.value, (int, float)):
+                initialized_before_loop.add(node.targets[0].id)
+
+    updated_in_loop: set[str] = set()
+    used_on_elevator_y: set[str] = set()
+    elevator_drawn = False
+    has_flip_or_update_in_loop = False
+    has_timing_in_loop = False
+
+    for node in ast.walk(main_loop):
+        if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name) and isinstance(node.op, (ast.Add, ast.Sub)):
+            updated_in_loop.add(node.target.id)
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            target = node.targets[0].id
+            if _is_self_increment_or_decrement(target, node.value):
+                updated_in_loop.add(target)
+
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Attribute):
+            target = node.targets[0]
+            if isinstance(target.value, ast.Name) and target.value.id == "elevator_rect" and target.attr in {"y", "top"}:
+                used_on_elevator_y.update({sub.id for sub in ast.walk(node.value) if isinstance(sub, ast.Name)})
+
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if node.func.attr in {"flip", "update"}:
+                if isinstance(node.func.value, ast.Attribute) and isinstance(node.func.value.value, ast.Name):
+                    if node.func.value.value.id == "pygame" and node.func.value.attr == "display":
+                        has_flip_or_update_in_loop = True
+
+            if node.func.attr == "wait":
+                if isinstance(node.func.value, ast.Attribute) and isinstance(node.func.value.value, ast.Name):
+                    if node.func.value.value.id == "pygame" and node.func.value.attr == "time":
+                        has_timing_in_loop = True
+            if node.func.attr == "tick":
+                has_timing_in_loop = True
+
+            if node.func.attr == "rect":
+                if isinstance(node.func.value, ast.Attribute) and isinstance(node.func.value.value, ast.Name):
+                    if node.func.value.value.id == "pygame" and node.func.value.attr == "draw":
+                        if any(isinstance(arg, ast.Name) and arg.id == "elevator_rect" for arg in node.args):
+                            elevator_drawn = True
+
+    motion_vars = {name for name in (initialized_before_loop & updated_in_loop) if name not in {"frames", "frame", "i"}}
+    applied_motion_vars = motion_vars & used_on_elevator_y
+    return motion_vars, applied_motion_vars, elevator_drawn, has_flip_or_update_in_loop, has_timing_in_loop
+
+
+def _matches_rect_shapes_pattern(assignment: AssignmentConfig, zone_name: str, code: str) -> bool:
+    if assignment.id != TARGET_ASSIGNMENT_RECT_PATTERN:
+        return False
+
+    motion_vars, applied_motion_vars, elevator_drawn, has_flip_or_update_in_loop, has_timing_in_loop = _collect_loop_motion_vars_and_rect_usage(code)
+
+    if zone_name == "offset_update":
+        return bool(motion_vars)
+    if zone_name == "apply_offset_to_rect":
+        return bool(applied_motion_vars)
+    if zone_name == "draw_elevator_rect":
+        return bool(applied_motion_vars) and elevator_drawn
+    if zone_name == "flip_and_wait":
+        return bool(applied_motion_vars) and has_flip_or_update_in_loop and has_timing_in_loop
+    return False
 
 
 def _linear_name_coeffs(node: ast.AST) -> dict[str, int] | None:
@@ -289,6 +370,15 @@ def _check_fill_zones(assignment: AssignmentConfig, code: str) -> list[ZoneMatch
             matched_attempt_line = True
             matched_expected_line = True
 
+        rect_zone_match = _matches_rect_shapes_pattern(assignment, zone.name, code)
+        if rect_zone_match:
+            matched_attempt_line = True
+            matched_expected_line = True
+
+        if assignment.id == TARGET_ASSIGNMENT_RECT_PATTERN and zone.name in {"offset_update", "apply_offset_to_rect", "draw_elevator_rect", "flip_and_wait"}:
+            matched_attempt_line = rect_zone_match
+            matched_expected_line = rect_zone_match
+
         if assignment.id == TARGET_ASSIGNMENT_POLYGON_PATTERN and zone.name == "polygon_points":
             matched_expected_line = _has_four_side_points_with_offset(code)
             matched_attempt_line = matched_attempt_line or regex_any_match(
@@ -337,6 +427,8 @@ def _check_requirements(assignment: AssignmentConfig, code: str) -> list[str]:
         if assignment.id == TARGET_ASSIGNMENT_POLYGON_PATTERN and token == "offset":
             if _extract_initialized_then_updated_vars(code):
                 continue
+        if assignment.id == TARGET_ASSIGNMENT_RECT_PATTERN and token in {"offset", "elevator_rect"}:
+            continue
         if not token_present(token, code):
             failures.append(f"Missing required token: {token}")
 
@@ -391,13 +483,28 @@ def _check_coherence_guardrails(assignment: AssignmentConfig, code: str) -> list
             failures.append("Position/offset updated but never used in draw context")
 
     if "offset_used_with_rect" in guardrails:
-        updated_offset = regex_any_match([r"\boffset\s*[-+]=\s*\d+", r"\boffset\s*=\s*offset\s*[-+]\s*\d+"], code)
-        offset_on_rect_line = regex_any_match([
-            r"\b\w*_rect\.(x|y|top|left)\s*=\s*[^\n]*\boffset\b",
-            r"\belevator_rect\.(x|y|top|left)\s*=\s*[^\n]*\boffset\b",
-        ], code)
-        if updated_offset and not offset_on_rect_line:
-            failures.append("Offset updated but not applied to rect position")
+        if assignment.id == TARGET_ASSIGNMENT_RECT_PATTERN:
+            _, applied_motion_vars, _, _, _ = _collect_loop_motion_vars_and_rect_usage(code)
+            if not applied_motion_vars:
+                failures.append("Offset updated but not applied to rect position")
+        else:
+            updated_offset = regex_any_match([r"\boffset\s*[-+]=\s*\d+", r"\boffset\s*=\s*offset\s*[-+]\s*\d+"], code)
+            offset_on_rect_line = regex_any_match([
+                r"\b\w*_rect\.(x|y|top|left)\s*=\s*[^\n]*\boffset\b",
+                r"\belevator_rect\.(x|y|top|left)\s*=\s*[^\n]*\boffset\b",
+            ], code)
+            if updated_offset and not offset_on_rect_line:
+                failures.append("Offset updated but not applied to rect position")
+
+    if assignment.id == TARGET_ASSIGNMENT_RECT_PATTERN:
+        _, _, elevator_drawn, has_flip_or_update_in_loop, has_timing_in_loop = _collect_loop_motion_vars_and_rect_usage(code)
+        if not elevator_drawn and "pygame.draw.rect" in code:
+            failures.append("Elevator rect is not drawn in the animation loop")
+        if ("pygame.display.flip" in code or "pygame.display.update" in code) and not has_flip_or_update_in_loop:
+            failures.append("Display flip/update appears only outside main while-loop")
+        if ("pygame.time.wait" in code or "tick(" in code) and not has_timing_in_loop:
+            failures.append("Timing call appears only outside main while-loop")
+
 
     return failures
 
@@ -451,6 +558,17 @@ def grade_submission(assignment: AssignmentConfig, payload: GradingInput) -> Gra
         return _to_result(assignment, payload, score, explanation, matched_names, unmet_names, analysis.coherence_failures, analysis.requirement_failures)
 
     if analysis.relevant_zone_match_count == 0:
+        if assignment.id == TARGET_ASSIGNMENT_RECT_PATTERN:
+            return _to_result(
+                assignment,
+                payload,
+                0,
+                "Turned in, but only starter/template structure was detected (no elevator motion logic attempt).",
+                matched_names,
+                unmet_names,
+                analysis.coherence_failures,
+                analysis.requirement_failures,
+            )
         return _to_result(
             assignment,
             payload,
@@ -468,6 +586,20 @@ def grade_submission(assignment: AssignmentConfig, payload: GradingInput) -> Gra
             payload,
             1,
             "Relevant early attempt detected (offset setup/update), but key polygon movement pieces are still missing.",
+            matched_names,
+            unmet_names,
+            analysis.coherence_failures,
+            analysis.requirement_failures,
+        )
+
+
+
+    if assignment.id == TARGET_ASSIGNMENT_RECT_PATTERN and analysis.meaningful_zone_match_count == 1 and "offset_update" in matched_names and not any(token in code for token in ["pygame.draw.rect", "pygame.display.flip", "pygame.display.update", "pygame.time.wait", "tick("]):
+        return _to_result(
+            assignment,
+            payload,
+            1,
+            "Relevant early attempt detected (motion variable setup/update), but elevator movement logic is still incomplete.",
             matched_names,
             unmet_names,
             analysis.coherence_failures,
