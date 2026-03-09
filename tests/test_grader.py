@@ -288,19 +288,19 @@ def test_animating_shapes_2_true_three_with_points_list_variable():
 import pygame
 window = pygame.display.set_mode((800, 600))
 frames = 0
-offset = 0
+slide = 0
 left = 100
 right = 200
 top = 50
 bottom = 150
 
 while frames < 100:
-    offset = offset + 4
-    p_a = (offset + left, top)
-    p_b = (right, offset + top)
-    p_c = (right + -offset, bottom)
-    p_d = (left, bottom + -offset)
-    points = [p_a, p_b, p_c, p_d]
+    slide = slide + 4
+    alpha = (slide + left, top)
+    beta = (right, slide + top)
+    gamma = (right + -slide, bottom)
+    delta = (left, bottom + -slide)
+    points = [alpha, beta, gamma, delta]
 
     pygame.draw.polygon(window, (255, 0, 0), points)
     pygame.display.flip()
