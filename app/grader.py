@@ -698,15 +698,43 @@ def grade_submission(assignment: AssignmentConfig, payload: GradingInput) -> Gra
 
     if analysis.relevant_zone_match_count == 0:
         if assignment.id == TARGET_ASSIGNMENT_RECT_PATTERN:
-            motion_vars, _, _, has_flip_or_update_in_loop, has_timing_in_loop = _collect_loop_motion_vars_and_rect_usage(code)
+            motion_vars, applied_motion_vars, elevator_drawn, has_flip_or_update_in_loop, has_timing_in_loop = _collect_loop_motion_vars_and_rect_usage(code)
             has_rect_draw_call = "pygame.draw.rect" in code
+            has_syntax_error = False
+            if code.strip():
+                try:
+                    ast.parse(code)
+                except SyntaxError:
+                    has_syntax_error = True
             if motion_vars:
                 if has_rect_draw_call and has_flip_or_update_in_loop and has_timing_in_loop:
+                    if not has_syntax_error:
+                        if not applied_motion_vars and not elevator_drawn:
+                            return _to_result(
+                                assignment,
+                                payload,
+                                1,
+                                "Relevant early attempt detected (motion/update/draw present), but elevator movement logic is malformed or incomplete.",
+                                matched_names,
+                                unmet_names,
+                                analysis.coherence_failures,
+                                analysis.requirement_failures,
+                            )
+                        return _to_result(
+                            assignment,
+                            payload,
+                            2,
+                            analysis.coherence_failures[0] if analysis.coherence_failures else "Relevant attempt detected, but elevator-specific animation logic is incomplete.",
+                            matched_names,
+                            unmet_names,
+                            analysis.coherence_failures,
+                            analysis.requirement_failures,
+                        )
                     return _to_result(
                         assignment,
                         payload,
-                        2,
-                        analysis.coherence_failures[0] if analysis.coherence_failures else "Relevant attempt detected, but elevator-specific animation logic is incomplete.",
+                        1,
+                        "Relevant early attempt detected (motion/update/draw present), but elevator movement logic is malformed or incomplete.",
                         matched_names,
                         unmet_names,
                         analysis.coherence_failures,
