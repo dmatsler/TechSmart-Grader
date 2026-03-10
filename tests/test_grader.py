@@ -38,11 +38,15 @@ def test_not_started_scores_zero():
     assert result.rubric_score == 0
 
 
-def test_started_not_submitted_one_relevant_zone_scores_one():
+def test_animating_shapes_1_true_one_started_not_submitted_early_attempt_scores_one():
     assignment = _assignment()
     code = """
 import pygame
-pygame.draw.circle(screen, (255, 0, 0), (50, 50), 20)
+frames = 0
+yoyo_offset = 0
+while frames < 30:
+    yoyo_offset += 4
+    frames += 1
 """
     result = grade_submission(
         assignment,
@@ -53,11 +57,7 @@ pygame.draw.circle(screen, (255, 0, 0), (50, 50), 20)
         ),
     )
     assert result.rubric_score == 1
-    assert result.matched_fill_zones == ["draw_shape"]
-    assert (
-        result.explanation
-        == "Relevant attempt detected, but the assignment is still incomplete and was not submitted."
-    )
+    assert "offset_setup_and_update" in result.matched_fill_zones
 
 
 def test_started_not_submitted_irrelevant_code_scores_zero():
@@ -77,7 +77,7 @@ for i in range(5):
     assert result.rubric_score == 0
 
 
-def test_turned_in_no_relevant_attempt_scores_one():
+def test_animating_shapes_1_true_zero_template_or_irrelevant_submission_scores_zero():
     assignment = _assignment()
     code = """
 import random
@@ -88,21 +88,26 @@ for i in range(10):
         assignment,
         GradingInput(assignment_id=assignment.id, status=SubmissionStatus.TURNED_IN, student_code=code),
     )
-    assert result.rubric_score == 1
-    assert result.explanation == "Turned in, but no relevant assignment-specific attempt was detected."
+    assert result.rubric_score == 0
+    assert result.explanation == "Turned in, but only starter/template structure was detected (no assignment-specific motion logic attempt)."
 
 
-def test_turned_in_meaningful_attempt_with_syntax_failure_scores_two():
+def test_animating_shapes_1_true_two_meaningful_but_incomplete_scores_two():
     assignment = _assignment()
     code = """
 import pygame
 frames = 0
-x = 10
-y = 20
+yoyo_x = 10
+yoyo_y = 20
+yoyo_offset = 0
+string_start = (yoyo_x, 0)
 while frames < 100:
-    x += 2
-    pygame.draw.circle(screen, (255,0,0), (x, y), 8)
-    pygame.display.flip(
+    yoyo_offset += 4
+    point = (yoyo_x, yoyo_y + yoyo_offset)
+    pygame.draw.circle(screen, (255,0,0), point, 8)
+    pygame.display.flip()
+    pygame.time.wait(40)
+    frames += 1
 """
     result = grade_submission(
         assignment,
@@ -115,17 +120,21 @@ while frames < 100:
     assert result.rubric_score == 2
 
 
-def test_turned_in_complete_submission_scores_three():
+def test_animating_shapes_1_true_three_complete_solution_scores_three():
     assignment = _assignment()
     code = """
 import pygame
 frames = 0
-x = 10
-y = 20
+yoyo_x = 10
+yoyo_y = 20
+yoyo_offset = 0
+string_start = (yoyo_x, 0)
 clock = pygame.time.Clock()
 while frames < 10:
-    x += 2
-    pygame.draw.circle(screen, (255, 0, 0), (x, y), 20)
+    yoyo_offset += 4
+    point = (yoyo_x, yoyo_y + yoyo_offset)
+    pygame.draw.line(screen, (255, 255, 255), string_start, point)
+    pygame.draw.circle(screen, (255, 0, 0), point, 20)
     pygame.display.flip()
     clock.tick(30)
     frames += 1
