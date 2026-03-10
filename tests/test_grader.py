@@ -92,6 +92,29 @@ for i in range(10):
     assert result.explanation == "Turned in, but only starter/template structure was detected (no assignment-specific motion logic attempt)."
 
 
+def test_animating_shapes_1_true_zero_starter_template_loop_flip_wait_only_scores_zero():
+    assignment = _assignment()
+    code = """
+import pygame
+window = pygame.display.set_mode((400, 300))
+frames = 0
+yoyo_x = 200
+yoyo_y = 100
+string_start = (yoyo_x, 0)
+
+while frames < 60:
+    window.fill((0, 0, 0))
+    pygame.display.flip()
+    pygame.time.wait(40)
+    frames += 1
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.TURNED_IN, student_code=code),
+    )
+    assert result.rubric_score == 0
+
+
 def test_animating_shapes_1_true_two_meaningful_but_incomplete_scores_two():
     assignment = _assignment()
     code = """
@@ -160,6 +183,7 @@ frames = 0
 yoyo_x = 250
 yoyo_y = 100
 yoyo_offset = 0
+string_start = (yoyo_x, 0)
 string_color = (255, 255, 255)
 yoyo_color = (255, 0, 0)
 
@@ -168,7 +192,7 @@ while frames < 100:
     point = (yoyo_x, yoyo_y + yoyo_offset)
 
     window.fill((0, 0, 0))
-    pygame.draw.line(window, string_color, (0, 0), point)
+    pygame.draw.line(window, string_color, string_start, point)
     pygame.draw.circle(window, yoyo_color, point, 50)
 
     pygame.display.flip()
@@ -186,6 +210,35 @@ while frames < 100:
     assert result.rubric_score == 3
     assert result.points == 100
 
+
+
+def test_animating_shapes_1_true_three_allows_flexible_motion_variable_name():
+    assignment = _assignment()
+    code = """
+import pygame
+frames = 0
+yoyo_x = 10
+yoyo_y = 20
+drop = 0
+string_start = (yoyo_x, 0)
+while frames < 10:
+    drop = drop + 4
+    center = (yoyo_x, yoyo_y + drop)
+    pygame.draw.line(screen, (255, 255, 255), string_start, center)
+    pygame.draw.circle(screen, (255, 0, 0), center, 20)
+    pygame.display.flip()
+    pygame.time.wait(40)
+    frames += 1
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(
+            assignment_id=assignment.id,
+            status=SubmissionStatus.TURNED_IN,
+            student_code=code,
+        ),
+    )
+    assert result.rubric_score == 3
 
 
 def test_weighted_unit_grade_calculation():

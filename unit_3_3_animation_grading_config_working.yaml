@@ -155,54 +155,55 @@ assignments:
   fill_zones:
   - name: offset_setup_and_update
     prompt_hints:
-    - Declare an offset
-    - Add to offset
+    - Declare a movement variable
+    - Increase it by 4 each frame
     required: true
     expected_patterns:
-    - \b\w*offset\w*\s*=\s*-?\d+\b
-    - \b\w*offset\w*\s*[-+]=\s*\d+\b
-    - \b\w*offset\w*\s*=\s*\w*offset\w*\s*[-+]\s*\d+\b
+    - \b[A-Za-z_]\w*\s*=\s*-?\d+\b
+    - \b[A-Za-z_]\w*\s*[-+]=\s*4\b
+    - \b[A-Za-z_]\w*\s*=\s*[A-Za-z_]\w*\s*\+\s*4\b
     anti_patterns: []
-    notes: Expect a motion offset initialized before the loop and updated each frame.
+    notes: Expect a motion variable initialized before the loop and updated by +4
+      each frame inside the loop.
   - name: point_from_offset
     prompt_hints:
-    - yoyo_y + offset
-    - center point
+    - Create a center point
+    - Use yoyo_y + movement variable
     required: true
     expected_patterns:
-    - \b\w+\s*=\s*\([^\n\)]*\byoyo_y\b[^\n\)]*\b\w*offset\w*\b[^\n\)]*\)
+    - \b\w+\s*=\s*\([^\n\)]*\byoyo_y\b[^\n\)]*\+[^\n\)]*\)
     anti_patterns: []
-    notes: Expect a center point tuple computed from yoyo_y plus the motion offset.
-  - name: draw_line_to_point
+    notes: Expect a point tuple derived from yoyo_y plus the movement variable.
+  - name: draw_line
     prompt_hints:
     - Draw a line
-    - string_start
+    - Use string_start and moving point
     required: true
     expected_patterns:
     - pygame\.draw\.line\s*\(
     - string_start
     anti_patterns: []
     notes: Expect a line from string_start to the moving point.
-  - name: draw_circle_at_point
+  - name: draw_circle
     prompt_hints:
-    - Draw a circle
-    - yoyo
+    - Draw the yoyo circle
+    - Use the moving point
     required: true
     expected_patterns:
     - pygame\.draw\.circle\s*\(
     anti_patterns: []
-    notes: Expect a yoyo circle drawn at the moving point.
+    notes: Expect a circle drawn at the same moving point.
   - name: flip_and_wait
     prompt_hints:
-    - flip
-    - wait
+    - flip or update each frame
+    - wait or tick each frame
     required: true
     expected_patterns:
     - pygame\.display\.(flip|update)\s*\(\s*\)
     - pygame\.time\.wait\s*\(\s*\d+\s*\)
     - clock\.tick\s*\(\s*\d+\s*\)
     anti_patterns: []
-    notes: Expect display update and frame delay.
+    notes: Expect display update and timing in the animation loop.
 - id: 3_3_animating_shapes_2_technique1practice2_py
   title: 3.3 Animating Shapes (2)
   file_name: Technique1Practice2.py
@@ -301,7 +302,8 @@ assignments:
     - \b[A-Za-z_]\w*\s*=\s*\(\s*(right\s*-\s*\w*offset\w*|right\s*\+\s*-\s*\w*offset\w*)\s*,\s*bottom\s*\)
     - \b[A-Za-z_]\w*\s*=\s*\(\s*left\s*,\s*(bottom\s*-\s*\w*offset\w*|bottom\s*\+\s*-\s*\w*offset\w*)\s*\)
     anti_patterns: []
-    notes: Expect four clockwise-rotation points derived from left/right/top/bottom and offset.
+    notes: Expect four clockwise-rotation points derived from left/right/top/bottom
+      and offset.
   - name: draw_polygon
     prompt_hints:
     - polygon
