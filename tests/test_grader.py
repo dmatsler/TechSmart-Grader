@@ -234,7 +234,29 @@ while frames < 100:
     assert result.rubric_score == 1
 
 
-def test_animating_shapes_2_true_two_meaningful_but_incomplete():
+def test_animating_shapes_2_true_zero_starter_only_submission_scores_zero():
+    assignment = _assignment_animating_shapes_2()
+    code = """
+import pygame
+window = pygame.display.set_mode((400, 400))
+left = 0
+right = 400
+top = 0
+bottom = 400
+frames = 0
+
+while frames < 100:
+    window.fill((0, 0, 0))
+    frames += 1
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.TURNED_IN, student_code=code),
+    )
+    assert result.rubric_score == 0
+
+
+def test_animating_shapes_2_true_two_complete_clockwise_points_but_wrong_offset_step():
     assignment = _assignment_animating_shapes_2()
     code = """
 import pygame
@@ -247,9 +269,12 @@ bottom = 150
 
 while frames < 100:
     offset += 2
-    point1 = (left, top + offset)
-    point2 = (right, top + offset)
-    pygame.draw.polygon(window, (255, 0, 0), [point1, point2])
+    top_left = (left + offset, top)
+    top_right = (right, top + offset)
+    bottom_right = (right - offset, bottom)
+    bottom_left = (left, bottom - offset)
+
+    pygame.draw.polygon(window, (255, 0, 0), [top_left, top_right, bottom_right, bottom_left])
     pygame.display.flip()
     pygame.time.wait(40)
     frames += 1
@@ -274,7 +299,7 @@ top = 50
 bottom = 150
 
 while frames < 100:
-    offset += 4
+    offset += 5
     top_left = (left + offset, top)
     top_right = (right, top + offset)
     bottom_right = (right - offset, bottom)
@@ -308,7 +333,7 @@ top = 50
 bottom = 150
 
 while frames < 100:
-    slide = slide + 4
+    slide = slide + 5
     alpha = (slide + left, top)
     beta = (right, slide + top)
     gamma = (right + -slide, bottom)
