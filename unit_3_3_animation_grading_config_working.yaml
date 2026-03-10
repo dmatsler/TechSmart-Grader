@@ -97,6 +97,7 @@ assignments:
   kind: practice
   count_in_unit_grade_default: true
   weight: 1.0
+  min_zones_matched_default: 4
   rubric_scale:
     '0': blank/no meaningful attempt
     '1': meaningful attempt but not submitted or minimal
@@ -123,10 +124,7 @@ assignments:
     required_imports:
     - pygame
     must_have_tokens:
-    - frames
     - while
-    - x
-    - y
     must_have_any:
     - - pygame.display.flip
       - pygame.display.update
@@ -134,9 +132,8 @@ assignments:
     - - pygame.time.wait
       - clock.tick
     must_have_draw_any:
+    - - pygame.draw.line
     - - pygame.draw.circle
-      - pygame.draw.line
-      - pygame.draw.rect
     coherence_guardrails:
     - name: draw_inside_loop
       rule: If a required pygame.draw.* call appears only outside the main while-loop,
@@ -153,30 +150,48 @@ assignments:
     - Display flip/update and timing control each frame
     - Required drawing call(s) present
     - Per-frame position/offset update present
-    - Draw call uses updated position variables
+    - Draw line from string_start to the moving yoyo point
+    - Draw circle at the same moving yoyo point
   fill_zones:
-  - name: position_update
+  - name: offset_setup_and_update
     prompt_hints:
-    - Add to
-    - Subtract from
-    - Update
+    - Declare an offset
+    - Add to offset
     required: true
     expected_patterns:
-    - \b(x|y|offset|dx|dy)\s*[-+]=\s*\d+\b
-    - \b(x|y)\s*=\s*\w+\s*[-+]\s*\d+\b
-    anti_patterns:
-    - ^\s*(x|y|offset)\s*=\s*0\s*$
-    notes: Expect at least one per-frame position/offset change.
-  - name: draw_shape
-    prompt_hints:
-    - Draw
-    - circle
-    - shape
-    required: true
-    expected_patterns:
-    - pygame\.draw\.(circle|rect|line)\s*\(
+    - \b\w*offset\w*\s*=\s*-?\d+\b
+    - \b\w*offset\w*\s*[-+]=\s*\d+\b
+    - \b\w*offset\w*\s*=\s*\w*offset\w*\s*[-+]\s*\d+\b
     anti_patterns: []
-    notes: Expect a pygame.draw call for the required shape(s).
+    notes: Expect a motion offset initialized before the loop and updated each frame.
+  - name: point_from_offset
+    prompt_hints:
+    - yoyo_y + offset
+    - center point
+    required: true
+    expected_patterns:
+    - \b\w+\s*=\s*\([^\n\)]*\byoyo_y\b[^\n\)]*\b\w*offset\w*\b[^\n\)]*\)
+    anti_patterns: []
+    notes: Expect a center point tuple computed from yoyo_y plus the motion offset.
+  - name: draw_line_to_point
+    prompt_hints:
+    - Draw a line
+    - string_start
+    required: true
+    expected_patterns:
+    - pygame\.draw\.line\s*\(
+    - string_start
+    anti_patterns: []
+    notes: Expect a line from string_start to the moving point.
+  - name: draw_circle_at_point
+    prompt_hints:
+    - Draw a circle
+    - yoyo
+    required: true
+    expected_patterns:
+    - pygame\.draw\.circle\s*\(
+    anti_patterns: []
+    notes: Expect a yoyo circle drawn at the moving point.
   - name: flip_and_wait
     prompt_hints:
     - flip

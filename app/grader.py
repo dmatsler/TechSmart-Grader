@@ -46,24 +46,54 @@ def _polygon_call_uses_var(code: str, var_name: str) -> bool:
 
 
 def _matches_point_based_movement_pattern(assignment: AssignmentConfig, zone_name: str, code: str) -> bool:
-    if assignment.id != TARGET_ASSIGNMENT_POINT_PATTERN or zone_name != "position_update":
+    if assignment.id != TARGET_ASSIGNMENT_POINT_PATTERN:
         return False
 
-    offset_updated = regex_any_match([
-        r"\b\w*offset\w*\s*[-+]=\s*\d+",
-        r"\b\w*offset\w*\s*=\s*\w*offset\w*\s*[-+]\s*\d+",
+    offset_names = set(re.findall(r"\b([A-Za-z_]\w*offset\w*)\b", code))
+    updated_offset_names = {
+        name
+        for name in offset_names
+        if regex_any_match([
+            rf"\b{re.escape(name)}\s*[-+]=\s*\d+",
+            rf"\b{re.escape(name)}\s*=\s*{re.escape(name)}\s*[-+]\s*\d+",
+        ], code)
+    }
+    if not updated_offset_names:
+        return False
+
+    point_vars = [
+        var
+        for var in _extract_point_vars_derived_from_offset(code)
+        if regex_any_match([
+            rf"\b{re.escape(var)}\s*=\s*\([^\n\)]*\byoyo_y\b[^\n\)]*\b({'|'.join(re.escape(name) for name in sorted(updated_offset_names))})\b[^\n\)]*\)",
+        ], code)
+    ]
+
+    if zone_name == "offset_setup_and_update":
+        return bool(updated_offset_names) and bool(regex_any_match([r"\b[A-Za-z_]\w*offset\w*\s*=\s*-?\d+\b"], code))
+
+    if zone_name == "point_from_offset":
+        return bool(point_vars)
+
+    if zone_name == "draw_line_to_point":
+        return any(
+            regex_any_match([rf"pygame\.draw\.line\s*\([^\n]*\bstring_start\b[^\n]*\b{re.escape(point_var)}\b"], code)
+            for point_var in point_vars
+        )
+
+    if zone_name == "draw_circle_at_point":
+        return any(
+            regex_any_match([rf"pygame\.draw\.circle\s*\([^\n]*\b{re.escape(point_var)}\b"], code)
+            for point_var in point_vars
+        )
+
+    if zone_name != "flip_and_wait":
+        return False
+
+    return regex_any_match([
+        r"pygame\.display\.(flip|update)\s*\(\s*\)",
+        r"(pygame\.time\.wait|clock\.tick)\s*\(\s*\d+\s*\)",
     ], code)
-    if not offset_updated:
-        return False
-
-    point_vars = _extract_point_vars_derived_from_offset(code)
-    if not point_vars:
-        return False
-
-    return any(
-        regex_any_match([rf"pygame\.draw\.(line|circle|rect)\s*\([^\n]*\b{re.escape(point_var)}\b"], code)
-        for point_var in point_vars
-    )
 
 
 def _collect_loop_motion_vars_and_rect_usage(code: str) -> tuple[set[str], set[str], bool, bool, bool]:
@@ -579,12 +609,12 @@ def grade_submission(assignment: AssignmentConfig, payload: GradingInput) -> Gra
         return _to_result(assignment, payload, score, explanation, matched_names, unmet_names, analysis.coherence_failures, analysis.requirement_failures)
 
     if analysis.relevant_zone_match_count == 0:
-        if assignment.id == TARGET_ASSIGNMENT_RECT_PATTERN:
+        if assignment.id in {TARGET_ASSIGNMENT_RECT_PATTERN, TARGET_ASSIGNMENT_POINT_PATTERN}:
             return _to_result(
                 assignment,
                 payload,
                 0,
-                "Turned in, but only starter/template structure was detected (no elevator motion logic attempt).",
+                "Turned in, but only starter/template structure was detected (no assignment-specific motion logic attempt).",
                 matched_names,
                 unmet_names,
                 analysis.coherence_failures,
