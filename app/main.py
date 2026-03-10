@@ -26,6 +26,21 @@ CONFIG = load_config(
     BASE_DIR / "unit_3_3_animation_grading_config_working.json",
 )
 ASSIGNMENTS = assignment_lookup(CONFIG)
+SELECTABLE_ASSIGNMENT_IDS = {
+    "3_3_animating_shapes_1_technique1practice1_py",
+    "3_3_animating_shapes_2_technique1practice2_py",
+    "3_3_animating_rect_shapes_1_technique2practice1_py",
+    "3_3_animating_rect_shapes_2_technique2practice2_py",
+    "3_3_adjust_animation_speed_1_technique3practice1_py",
+    "3_3_adjust_animation_speed_2_technique3practice2_py",
+    "3_3_backgrounds_and_trails_1_technique4practice1_py",
+    "3_3_backgrounds_and_trails_2_technique4practice2_py",
+    "3_3_stick_dance_random_stickdancerandom_solution_py",
+    "3_3_healthful_ufo_healthfulufo_solution_py",
+    "3_3_stick_dance_smooth_stickdancesmooth_solution_py",
+    "3_3_bouncing_ball_bouncingball_solution_py",
+}
+SELECTABLE_ASSIGNMENTS = [a for a in CONFIG.assignments if a.id in SELECTABLE_ASSIGNMENT_IDS]
 SESSION_RESULTS: dict[str, list[UnitGradeEntry]] = {}
 
 
@@ -47,7 +62,7 @@ async def home(request: Request) -> HTMLResponse:
         request,
         "index.html",
         {
-            "assignments": CONFIG.assignments,
+            "assignments": SELECTABLE_ASSIGNMENTS,
             "statuses": [s.value for s in SubmissionStatus],
         },
     )
@@ -148,4 +163,3 @@ async def reset_session(request: Request) -> RedirectResponse:
     sid = _session_key(request)
     SESSION_RESULTS[sid] = []
     return RedirectResponse("/unit-grade", status_code=303)
-
