@@ -49,51 +49,77 @@ def _matches_point_based_movement_pattern(assignment: AssignmentConfig, zone_nam
     if assignment.id != TARGET_ASSIGNMENT_POINT_PATTERN:
         return False
 
-    offset_names = set(re.findall(r"\b([A-Za-z_]\w*offset\w*)\b", code))
-    updated_offset_names = {
-        name
-        for name in offset_names
-        if regex_any_match([
-            rf"\b{re.escape(name)}\s*[-+]=\s*\d+",
-            rf"\b{re.escape(name)}\s*=\s*{re.escape(name)}\s*[-+]\s*\d+",
-        ], code)
-    }
-    if not updated_offset_names:
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
         return False
 
-    point_vars = [
-        var
-        for var in _extract_point_vars_derived_from_offset(code)
-        if regex_any_match([
-            rf"\b{re.escape(var)}\s*=\s*\([^\n\)]*\byoyo_y\b[^\n\)]*\b({'|'.join(re.escape(name) for name in sorted(updated_offset_names))})\b[^\n\)]*\)",
-        ], code)
-    ]
+    while_nodes = [node for node in ast.walk(tree) if isinstance(node, ast.While)]
+    if not while_nodes:
+        return False
+    main_loop = min(while_nodes, key=lambda node: node.lineno)
+
+    initialized_before_loop: set[str] = set()
+    for node in ast.walk(tree):
+        if not hasattr(node, "lineno") or node.lineno >= main_loop.lineno:
+            continue
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            initialized_before_loop.add(node.targets[0].id)
+
+    motion_vars: set[str] = set()
+    point_vars: set[str] = set()
+    line_uses_point_var = False
+    circle_uses_point_var = False
+    has_flip_or_update_in_loop = False
+    has_timing_in_loop = False
+
+    for node in ast.walk(main_loop):
+        if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name) and isinstance(node.op, ast.Add):
+            if isinstance(node.value, ast.Constant) and node.value.value == 4 and node.target.id in initialized_before_loop:
+                motion_vars.add(node.target.id)
+
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            target = node.targets[0]
+            if isinstance(node.value, ast.BinOp) and isinstance(node.value.op, ast.Add) and isinstance(node.value.right, ast.Constant) and node.value.right.value == 4:
+                if isinstance(node.value.left, ast.Name) and node.value.left.id == target.id and target.id in initialized_before_loop:
+                    motion_vars.add(target.id)
+
+    if motion_vars:
+        for node in ast.walk(main_loop):
+            if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                if isinstance(node.value, ast.Tuple) and len(node.value.elts) == 2:
+                    tuple_names = {sub.id for sub in ast.walk(node.value) if isinstance(sub, ast.Name)}
+                    if "yoyo_y" in tuple_names and tuple_names.intersection(motion_vars):
+                        point_vars.add(node.targets[0].id)
+
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                if isinstance(node.func.value, ast.Attribute) and isinstance(node.func.value.value, ast.Name) and node.func.value.value.id == "pygame" and node.func.value.attr == "draw":
+                    draw_name = node.func.attr
+                    arg_names = {sub.id for arg in node.args for sub in ast.walk(arg) if isinstance(sub, ast.Name)}
+                    if draw_name == "line" and "string_start" in arg_names and point_vars.intersection(arg_names):
+                        line_uses_point_var = True
+                    if draw_name == "circle" and point_vars.intersection(arg_names):
+                        circle_uses_point_var = True
+
+                if isinstance(node.func.value, ast.Attribute) and isinstance(node.func.value.value, ast.Name) and node.func.value.value.id == "pygame" and node.func.value.attr == "display" and node.func.attr in {"flip", "update"}:
+                    has_flip_or_update_in_loop = True
+
+                if isinstance(node.func.value, ast.Attribute) and isinstance(node.func.value.value, ast.Name) and node.func.value.value.id == "pygame" and node.func.value.attr == "time" and node.func.attr == "wait":
+                    has_timing_in_loop = True
+                if isinstance(node.func.value, ast.Name) and node.func.value.id == "clock" and node.func.attr == "tick":
+                    has_timing_in_loop = True
 
     if zone_name == "offset_setup_and_update":
-        return bool(updated_offset_names) and bool(regex_any_match([r"\b[A-Za-z_]\w*offset\w*\s*=\s*-?\d+\b"], code))
-
+        return bool(motion_vars)
     if zone_name == "point_from_offset":
         return bool(point_vars)
-
-    if zone_name == "draw_line_to_point":
-        return any(
-            regex_any_match([rf"pygame\.draw\.line\s*\([^\n]*\bstring_start\b[^\n]*\b{re.escape(point_var)}\b"], code)
-            for point_var in point_vars
-        )
-
-    if zone_name == "draw_circle_at_point":
-        return any(
-            regex_any_match([rf"pygame\.draw\.circle\s*\([^\n]*\b{re.escape(point_var)}\b"], code)
-            for point_var in point_vars
-        )
-
-    if zone_name != "flip_and_wait":
-        return False
-
-    return regex_any_match([
-        r"pygame\.display\.(flip|update)\s*\(\s*\)",
-        r"(pygame\.time\.wait|clock\.tick)\s*\(\s*\d+\s*\)",
-    ], code)
+    if zone_name == "draw_line":
+        return line_uses_point_var
+    if zone_name == "draw_circle":
+        return circle_uses_point_var
+    if zone_name == "flip_and_wait":
+        return has_flip_or_update_in_loop and has_timing_in_loop
+    return False
 
 
 def _collect_loop_motion_vars_and_rect_usage(code: str) -> tuple[set[str], set[str], bool, bool, bool]:
@@ -464,7 +490,8 @@ def _check_fill_zones(assignment: AssignmentConfig, code: str) -> list[ZoneMatch
             if zone.expected_patterns and regex_any_match(zone.expected_patterns, line):
                 matched_expected_line = True
 
-        if _matches_point_based_movement_pattern(assignment, zone.name, code):
+        point_zone_match = _matches_point_based_movement_pattern(assignment, zone.name, code)
+        if point_zone_match:
             matched_attempt_line = True
             matched_expected_line = True
 
@@ -480,6 +507,10 @@ def _check_fill_zones(assignment: AssignmentConfig, code: str) -> list[ZoneMatch
         if assignment.id == TARGET_ASSIGNMENT_RECT_PATTERN and zone.name in {"offset_update", "apply_offset_to_rect", "draw_elevator_rect", "flip_and_wait"}:
             matched_attempt_line = rect_zone_match
             matched_expected_line = rect_zone_match
+
+        if assignment.id == TARGET_ASSIGNMENT_POINT_PATTERN and zone.name in {"offset_setup_and_update", "point_from_offset", "draw_line", "draw_circle", "flip_and_wait"}:
+            matched_attempt_line = point_zone_match
+            matched_expected_line = point_zone_match
 
         if assignment.id == TARGET_ASSIGNMENT_POLYGON_PATTERN and zone.name == "polygon_points":
             matched_expected_line = _has_four_side_points_with_offset(code)
