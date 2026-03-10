@@ -670,6 +670,12 @@ def analyze_submission(assignment: AssignmentConfig, code: str) -> AnalysisSumma
     )
 
 
+def _has_rect_shapes_early_attempt(code: str) -> bool:
+    motion_vars, _, _, has_flip_or_update_in_loop, has_timing_in_loop = _collect_loop_motion_vars_and_rect_usage(code)
+    has_rect_draw_attempt = any(token in code for token in ("pygame.draw.rect", "pygame.draw.rectangle"))
+    return bool(motion_vars) or has_rect_draw_attempt or has_flip_or_update_in_loop or has_timing_in_loop
+
+
 def grade_submission(assignment: AssignmentConfig, payload: GradingInput) -> GradingResult:
     code = payload.student_code or ""
 
@@ -688,7 +694,12 @@ def grade_submission(assignment: AssignmentConfig, payload: GradingInput) -> Gra
     unmet_names = [z.name for z in analysis.zone_matches if z.matched_expected is False]
 
     if payload.status == SubmissionStatus.STARTED_NOT_SUBMITTED:
-        score = 1 if analysis.relevant_zone_match_count >= 1 else 0
+        if assignment.id == TARGET_ASSIGNMENT_RECT_PATTERN:
+            has_relevant_attempt = analysis.relevant_zone_match_count >= 1 or _has_rect_shapes_early_attempt(code)
+        else:
+            has_relevant_attempt = analysis.relevant_zone_match_count >= 1
+
+        score = 1 if has_relevant_attempt else 0
         explanation = (
             "Relevant attempt detected, but the assignment is still incomplete and was not submitted."
             if score == 1
