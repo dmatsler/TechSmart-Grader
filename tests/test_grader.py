@@ -493,6 +493,35 @@ while frames < 100:
     assert "Offset updated but not applied to rect position" in result.coherence_guardrail_failures
 
 
+
+
+def test_animating_rect_shapes_1_true_two_wrong_speed_scores_two():
+    assignment = _assignment_animating_rect_shapes_1()
+    code = """
+import pygame
+window = pygame.display.set_mode((800, 600))
+frames = 0
+elevator_start = 320
+elevator_rect = pygame.Rect(350, elevator_start, 50, 70)
+slide = 0
+
+while frames < 100:
+    slide -= 3
+    elevator_rect.y = elevator_start + slide
+
+    window.fill((120, 180, 255))
+    pygame.draw.rect(window, (255, 0, 0), elevator_rect)
+    pygame.display.flip()
+    pygame.time.wait(40)
+    frames += 1
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.TURNED_IN, student_code=code),
+    )
+    assert result.rubric_score == 2
+    assert "Elevator offset should move upward by 2 pixels per frame" in result.coherence_guardrail_failures
+
 def test_animating_rect_shapes_1_true_one_scores_one():
     assignment = _assignment_animating_rect_shapes_1()
     code = """
