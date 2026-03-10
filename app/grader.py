@@ -313,6 +313,57 @@ def _extract_initialized_then_updated_vars(code: str) -> set[str]:
     return initialized_before_loop & updated_in_loop
 
 
+def _extract_initialized_then_updated_vars_with_constant_step(code: str, required_step: int) -> set[str]:
+    """Return vars initialized before main loop and updated in loop by an exact constant step."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return set()
+
+    while_nodes = [node for node in ast.walk(tree) if isinstance(node, ast.While)]
+    if not while_nodes:
+        return set()
+
+    main_loop = min(while_nodes, key=lambda node: node.lineno)
+    initialized_before_loop: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) and node.lineno < main_loop.lineno:
+            initialized_before_loop.add(node.targets[0].id)
+
+    updated_with_step: set[str] = set()
+    for node in ast.walk(main_loop):
+        if (
+            isinstance(node, ast.AugAssign)
+            and isinstance(node.target, ast.Name)
+            and isinstance(node.op, (ast.Add, ast.Sub))
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, (int, float))
+        ):
+            step = int(node.value.value)
+            if isinstance(node.op, ast.Sub):
+                step = -step
+            if step == required_step:
+                updated_with_step.add(node.target.id)
+
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            target = node.targets[0].id
+            value = node.value
+            if not isinstance(value, ast.BinOp) or not isinstance(value.op, (ast.Add, ast.Sub)):
+                continue
+
+            if isinstance(value.left, ast.Name) and value.left.id == target and isinstance(value.right, ast.Constant) and isinstance(value.right.value, (int, float)):
+                step = int(value.right.value)
+                if isinstance(value.op, ast.Sub):
+                    step = -step
+                if step == required_step:
+                    updated_with_step.add(target)
+            elif isinstance(value.right, ast.Name) and value.right.id == target and isinstance(value.left, ast.Constant) and isinstance(value.left.value, (int, float)) and isinstance(value.op, ast.Add):
+                if int(value.left.value) == required_step:
+                    updated_with_step.add(target)
+
+    return initialized_before_loop & updated_with_step
+
+
 def _is_self_increment_or_decrement(name: str, expr: ast.AST) -> bool:
     if not isinstance(expr, ast.BinOp) or not isinstance(expr.op, (ast.Add, ast.Sub)):
         return False
@@ -389,7 +440,7 @@ def _matches_polygon_side_point_pattern(assignment: AssignmentConfig, zone_name:
         return _has_four_side_points_with_offset(code)
 
     if zone_name == "offset_setup_and_update":
-        return bool(_extract_initialized_then_updated_vars(code))
+        return bool(_extract_initialized_then_updated_vars_with_constant_step(code, 5))
 
     if zone_name == "draw_polygon":
         return _polygon_call_uses_clockwise_points(code)
@@ -438,7 +489,7 @@ def _check_fill_zones(assignment: AssignmentConfig, code: str) -> list[ZoneMatch
             )
 
         if assignment.id == TARGET_ASSIGNMENT_POLYGON_PATTERN and zone.name == "offset_setup_and_update":
-            matched_expected_line = bool(_extract_initialized_then_updated_vars(code))
+            matched_expected_line = bool(_extract_initialized_then_updated_vars_with_constant_step(code, 5))
             matched_attempt_line = matched_attempt_line or matched_expected_line
 
         meaningful_line = matched_attempt_line and not anti_hit
@@ -609,7 +660,7 @@ def grade_submission(assignment: AssignmentConfig, payload: GradingInput) -> Gra
         return _to_result(assignment, payload, score, explanation, matched_names, unmet_names, analysis.coherence_failures, analysis.requirement_failures)
 
     if analysis.relevant_zone_match_count == 0:
-        if assignment.id in {TARGET_ASSIGNMENT_RECT_PATTERN, TARGET_ASSIGNMENT_POINT_PATTERN}:
+        if assignment.id in {TARGET_ASSIGNMENT_RECT_PATTERN, TARGET_ASSIGNMENT_POINT_PATTERN, TARGET_ASSIGNMENT_POLYGON_PATTERN}:
             return _to_result(
                 assignment,
                 payload,
@@ -632,6 +683,18 @@ def grade_submission(assignment: AssignmentConfig, payload: GradingInput) -> Gra
         )
 
     if assignment.id == TARGET_ASSIGNMENT_POLYGON_PATTERN and analysis.relevant_zone_match_count >= 1 and analysis.meaningful_zone_match_count < 2:
+        has_offset_attempt = any(z.name == "offset_setup_and_update" and z.matched_attempt for z in analysis.zone_matches)
+        if not has_offset_attempt:
+            return _to_result(
+                assignment,
+                payload,
+                0,
+                "Turned in, but only starter/template structure was detected (no assignment-specific motion logic attempt).",
+                matched_names,
+                unmet_names,
+                analysis.coherence_failures,
+                analysis.requirement_failures,
+            )
         return _to_result(
             assignment,
             payload,
