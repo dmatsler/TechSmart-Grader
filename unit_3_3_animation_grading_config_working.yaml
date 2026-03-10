@@ -388,11 +388,11 @@ assignments:
     - Subtract from offset
     required: true
     expected_patterns:
-    - \boffset\s*[-+]=\s*2\b
-    - \boffset\s*=\s*offset\s*-\s*2\b
+    - \b[A-Za-z_]\w*\s*[-+]=\s*2\b
+    - \b([A-Za-z_]\w*)\s*=\s*\1\s*-\s*2\b
     anti_patterns:
-    - ^\s*offset\s*=\s*0\s*$
-    notes: Expect offset to change by -2 each frame.
+    - ^\s*[A-Za-z_]\w*\s*=\s*0\s*$
+    notes: Expect a motion variable to change by -2 each frame.
   - name: apply_offset_to_rect
     prompt_hints:
     - Use the offset to set the elevator rect
@@ -448,6 +448,9 @@ assignments:
     - name: flip_inside_loop
       rule: If flip/update exists but only outside the main while-loop, score cannot
         exceed 2.
+    - name: elevator_offset_step_negative_two
+      rule: If the elevator motion variable is not updated by -2 each frame, score
+        cannot exceed 2.
     score3_minimums:
     - Animation loop (while) present
     - Offset updated each frame (e.g., -2 per frame)
@@ -1045,6 +1048,9 @@ assignments:
     - name: flip_inside_loop
       rule: If flip/update exists but only outside the main while-loop, score cannot
         exceed 2.
+    - name: elevator_offset_step_negative_two
+      rule: If the elevator motion variable is not updated by -2 each frame, score
+        cannot exceed 2.
     score3_minimums:
     - Animation loop (while) present
     - Display flip/update and timing control each frame
@@ -1137,6 +1143,9 @@ assignments:
     - name: flip_inside_loop
       rule: If flip/update exists but only outside the main while-loop, score cannot
         exceed 2.
+    - name: elevator_offset_step_negative_two
+      rule: If the elevator motion variable is not updated by -2 each frame, score
+        cannot exceed 2.
     score3_minimums:
     - Animation loop (while) present
     - Display flip/update and timing control each frame
@@ -1257,6 +1266,9 @@ assignments:
     - name: flip_inside_loop
       rule: If flip/update exists but only outside the main while-loop, score cannot
         exceed 2.
+    - name: elevator_offset_step_negative_two
+      rule: If the elevator motion variable is not updated by -2 each frame, score
+        cannot exceed 2.
     score3_minimums:
     - Animation loop (while) present
     - Display flip/update and timing control each frame
@@ -1374,6 +1386,9 @@ assignments:
     - name: flip_inside_loop
       rule: If flip/update exists but only outside the main while-loop, score cannot
         exceed 2.
+    - name: elevator_offset_step_negative_two
+      rule: If the elevator motion variable is not updated by -2 each frame, score
+        cannot exceed 2.
     score3_minimums:
     - Animation loop (while) present
     - Display flip/update and timing control each frame
@@ -1511,6 +1526,9 @@ assignments:
     - name: flip_inside_loop
       rule: If flip/update exists but only outside the main while-loop, score cannot
         exceed 2.
+    - name: elevator_offset_step_negative_two
+      rule: If the elevator motion variable is not updated by -2 each frame, score
+        cannot exceed 2.
     score3_minimums:
     - Animation loop (while) present
     - Display flip/update and timing control each frame

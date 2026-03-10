@@ -629,6 +629,12 @@ def _check_coherence_guardrails(assignment: AssignmentConfig, code: str) -> list
             if updated_offset and not offset_on_rect_line:
                 failures.append("Offset updated but not applied to rect position")
 
+    if "elevator_offset_step_negative_two" in guardrails and assignment.id == TARGET_ASSIGNMENT_RECT_PATTERN:
+        motion_vars, applied_motion_vars, _, _, _ = _collect_loop_motion_vars_and_rect_usage(code)
+        negative_two_vars = _extract_initialized_then_updated_vars_with_constant_step(code, -2)
+        if motion_vars and applied_motion_vars and not (applied_motion_vars & negative_two_vars):
+            failures.append("Elevator offset should move upward by 2 pixels per frame")
+
     if assignment.id == TARGET_ASSIGNMENT_RECT_PATTERN:
         _, _, elevator_drawn, has_flip_or_update_in_loop, has_timing_in_loop = _collect_loop_motion_vars_and_rect_usage(code)
         if not elevator_drawn and "pygame.draw.rect" in code:
@@ -691,7 +697,43 @@ def grade_submission(assignment: AssignmentConfig, payload: GradingInput) -> Gra
         return _to_result(assignment, payload, score, explanation, matched_names, unmet_names, analysis.coherence_failures, analysis.requirement_failures)
 
     if analysis.relevant_zone_match_count == 0:
-        if assignment.id in {TARGET_ASSIGNMENT_RECT_PATTERN, TARGET_ASSIGNMENT_POINT_PATTERN, TARGET_ASSIGNMENT_POLYGON_PATTERN}:
+        if assignment.id == TARGET_ASSIGNMENT_RECT_PATTERN:
+            motion_vars, _, _, has_flip_or_update_in_loop, has_timing_in_loop = _collect_loop_motion_vars_and_rect_usage(code)
+            has_rect_draw_call = "pygame.draw.rect" in code
+            if motion_vars:
+                if has_rect_draw_call and has_flip_or_update_in_loop and has_timing_in_loop:
+                    return _to_result(
+                        assignment,
+                        payload,
+                        2,
+                        analysis.coherence_failures[0] if analysis.coherence_failures else "Relevant attempt detected, but elevator-specific animation logic is incomplete.",
+                        matched_names,
+                        unmet_names,
+                        analysis.coherence_failures,
+                        analysis.requirement_failures,
+                    )
+                return _to_result(
+                    assignment,
+                    payload,
+                    1,
+                    "Relevant early attempt detected (motion variable setup/update), but elevator movement logic is still incomplete.",
+                    matched_names,
+                    unmet_names,
+                    analysis.coherence_failures,
+                    analysis.requirement_failures,
+                )
+            return _to_result(
+                assignment,
+                payload,
+                0,
+                "Turned in, but only starter/template structure was detected (no assignment-specific motion logic attempt).",
+                matched_names,
+                unmet_names,
+                analysis.coherence_failures,
+                analysis.requirement_failures,
+            )
+
+        if assignment.id in {TARGET_ASSIGNMENT_POINT_PATTERN, TARGET_ASSIGNMENT_POLYGON_PATTERN}:
             return _to_result(
                 assignment,
                 payload,
