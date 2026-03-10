@@ -433,6 +433,49 @@ def test_animating_rect_shapes_1_real_starter_true_zero_submission_scores_zero()
     assert "apply_offset_to_rect" in result.unmet_fill_zones
 
 
+def test_animating_rect_shapes_1_started_not_submitted_malformed_relevant_attempt_scores_one():
+    assignment = _assignment_animating_rect_shapes_1()
+    code = """
+import pygame
+pygame.init()
+
+window = pygame.display.set_mode([400, 400])
+
+sky_color = (180, 200, 240)
+ground_color = (100, 150, 100)
+building_color = (50, 50, 50)
+elevator_color = (100, 100, 100)
+
+ground_rect = pygame.Rect(0, 300, 400, 100)
+building_rect = pygame.Rect(250, 20, 100, 280)
+
+elevator_start = 240
+elevator_rect = pygame.Rect(240, elevator_start, 40, 60)
+
+e_offset = 0
+
+frames = 0
+while frames < 100:
+    e_offset -= -2
+    rectangle.x = r_x_start + r_off
+
+    window.fill(sky_color)
+    pygame.draw.rect(window, ground_color, ground_rect)
+    pygame.draw.rect(window, building_color, building_rect)
+
+    pygame.draw.rectangle(window, )
+    pygame.display.flip()
+    pygame.time.wait(40)
+
+    frames += 1
+"""
+    result = grade_submission(
+        assignment,
+        GradingInput(assignment_id=assignment.id, status=SubmissionStatus.STARTED_NOT_SUBMITTED, student_code=code),
+    )
+    assert result.rubric_score == 1
+
+
 def test_animating_rect_shapes_1_true_three_custom_offset_variable_scores_three():
     assignment = _assignment_animating_rect_shapes_1()
     code = """
