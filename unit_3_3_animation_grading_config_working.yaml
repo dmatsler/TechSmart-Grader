@@ -263,7 +263,7 @@ assignments:
         to pygame.draw.polygon, score cannot exceed 2.
     score3_minimums:
     - Animation loop (while) present
-    - Offset updated each frame
+    - Offset updated each frame by +5
     - Four point tuples created using left/right/top/bottom and offset
     - pygame.draw.polygon uses those points
     - Display flip/update and timing control each frame
@@ -279,8 +279,9 @@ assignments:
     - \b\w*offset\w*\s*[-+]=\s*[-+]?\d+\b
     - \b\w*offset\w*\s*=\s*\w*offset\w*\s*[-+]\s*\d+\b
     expected_patterns:
-    - \b\w*offset\w*\s*[-+]=\s*\d+\b
-    - \b\w*offset\w*\s*=\s*\w*offset\w*\s*[-+]\s*\d+\b
+    - \b\w*offset\w*\s*\+=\s*5\b
+    - \b\w*offset\w*\s*=\s*\w*offset\w*\s*\+\s*5\b
+    - \b\w*offset\w*\s*=\s*5\s*\+\s*\w*offset\w*\b
     anti_patterns: []
     notes: Expect offset variable setup followed by per-frame update.
   - name: polygon_points
