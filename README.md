@@ -1,6 +1,6 @@
 # TechSmart Grading Companion
 
-TechSmart's built-in grading system provides limited feedback to teachers grading Python/Pygame assignments — showing only completion status, line counts, and syntax errors. This companion app addresses that gap with rubric-based scoring, fill-zone analysis, coherence guardrails, and a unit grade calculator.
+TechSmart's built-in grading system evaluates student Python assignments using a **line-count proxy** — a pie chart bubble that fills as students write more lines of code. It does not verify that code runs, meets requirements, or demonstrates the intended concepts. This companion app addresses that gap with rubric-based scoring, fill-zone analysis, coherence guardrails, and a unit grade calculator.
 
 > **MVP prototype** for TechSmart CS101 Unit 3.3 rubric grading. Prioritizes static checks and template-aware fill-zone matching over full runtime execution.
 
@@ -8,7 +8,15 @@ TechSmart's built-in grading system provides limited feedback to teachers gradin
 
 ## Why I Built This
 
-As a CS101 teacher using TechSmart daily, I found myself manually reviewing student code one submission at a time with no structured rubric feedback. TechSmart tells you *if* a student turned something in — not *how well* they did it. This tool was built to solve that problem directly in the classroom.
+TechSmart evaluates student Python assignments using a **line-count proxy** — a pie chart bubble that fills as students write more lines of code. According to TechSmart's own Gradebook documentation, certain assignment indicators are evaluated by *number of lines of code written*. The only way a syntax error surfaces is if the student *runs* their program before turning it in. If they turn it in without running it, the system stays silent.
+
+This creates a critical gap: students can game the system by copying random or incomplete lines of code to fill the completion bubble without writing functional programs. A full green bubble does not mean working code.
+
+For a teacher managing 60+ students with anywhere from 6–15 programs per unit, manually running every submission to verify it actually executes and meets requirements is unsustainable. A two-week unit can mean 600–900 individual programs to check.
+
+This companion app was built to close that gap — analyzing actual student code against assignment-specific rubric criteria, fill-zone expectations, and coherence guardrails, returning meaningful feedback that the TechSmart bubble system never provides.
+
+The long-term vision is a browser extension that ingests student submissions automatically and flags incomplete or inaccurate work *before* it gets turned in — giving students specific, actionable feedback at the point of submission rather than after the fact.
 
 ---
 
@@ -70,7 +78,7 @@ app/utils.py         – Parsing and matching helpers
 templates/           – Server-rendered pages
 static/style.css     – Minimal CSS
 tests/test_grader.py – MVP grading rules tests
-assets/              – Screenshots
+screenshots/         – App screenshots
 ```
 
 ---
@@ -125,9 +133,11 @@ pytest -q
 
 The app is structured for extensibility. Planned additions include:
 
-- **Browser extension** — auto-ingests student code directly from TechSmart "More Actions → View" pages, eliminating manual copy/paste entirely
-- **Batch processing pipeline** — grades all submissions for a full class automatically, outputting a complete unit grade report
-- **PDF/template diff helpers**
+- **Browser extension** — auto-ingests student code directly from TechSmart "More Actions → View" pages, eliminating manual copy/paste entirely; intercepts the Turn In button to run checks before submission is allowed
+- **Student-facing pre-submit validation** — blocks turn-in and returns specific, actionable feedback when requirements are not met
+- **Batch processing pipeline** — grades all submissions for a full class automatically, outputting a complete unit grade report per student
+- **Anti-hardcode checks** — concept verification to ensure students used required structures (loops, functions, conditionals) rather than inflating line counts
 - **AST-level semantic checks** for deeper code analysis
+- **Safe runtime execution** via sandboxed environment
 - **Additional units** beyond CS101 Unit 3.3
 - **TechSmart API integration** if/when available
