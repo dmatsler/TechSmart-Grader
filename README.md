@@ -15,22 +15,22 @@ As a CS101 teacher using TechSmart daily, I found myself manually reviewing stud
 ## Screenshots
 
 ### Grade Submission
-![Grade Submission](screenshots/Submission entry screenshot.png)
+![Grade Submission](screenshots/Submission_entry_screenshot.png)
 
 ### Grading Result — Score 0
-![True 0](screenshots/True 0 screenshot.png)
+![True 0](screenshots/True_0_screenshot.png)
 
 ### Grading Result — Score 1 (50/100)
-![True 1](screenshots/True 1 screenshot.png)
+![True 1](screenshots/True_1_screenshot.png)
 
 ### Grading Result — Score 2 (75/100)
-![True 2](screenshots/True 2 screenshot.png)
+![True 2](screenshots/True_2_screenshot.png)
 
 ### Grading Result — Score 3 (100/100)
-![True 3](screenshots/True 3 screenshot.png)
+![True 3](screenshots/True_3_screenshot.png)
 
 ### Unit Grade Calculator
-![Unit Grade](screenshots/Unit Grade screenshot.png)
+![Unit Grade](screenshots/Unit_Grade_screenshot.png)
 
 ---
 
