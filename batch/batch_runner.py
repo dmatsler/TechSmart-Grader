@@ -1,9 +1,5 @@
 """
 Batch runner — wires the scraper to the existing grading engine.
-
-Takes scraped submissions, maps them to AssignmentConfig objects,
-calls grade_submission() for each, and returns a structured results table
-ready for report.py to write out.
 """
 from __future__ import annotations
 
@@ -12,18 +8,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-# Allow running from repo root or from inside batch/
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from app.config_loader import assignment_lookup, load_config
 from app.grader import grade_submission
-from app.models import GradingInput, GradingResult, SubmissionStatus
+from app.models import GradingInput, GradingResult, SubmissionStatus, UnitGradeEntry
 from app.unit_grade import calculate_unit_grade
-from app.models import UnitGradeEntry
 
 from batch.scraper import ScrapedSubmission, scrape_all_assignments
+
 
 # ---------------------------------------------------------------------------
 # Data models
@@ -47,14 +42,12 @@ class StudentAssignmentResult:
 @dataclass
 class StudentUnitResult:
     student_name: str
-    # All graded assignments for this student
     assignment_results: list[StudentAssignmentResult] = field(default_factory=list)
-    # Composite grade for each named run
     run_grades: dict[str, float] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
-# Config loader (singleton, loaded once)
+# Config loader
 # ---------------------------------------------------------------------------
 
 def _load_app_config():
@@ -66,45 +59,28 @@ def _load_app_config():
 
 _APP_CONFIG, _ASSIGNMENT_LOOKUP = _load_app_config()
 
-
-# ---------------------------------------------------------------------------
-# Status mapping: TechSmart DOM status → SubmissionStatus enum
-# ---------------------------------------------------------------------------
-
 _STATUS_MAP = {
-    "turned_in":            SubmissionStatus.TURNED_IN,
+    "turned_in":             SubmissionStatus.TURNED_IN,
     "started_not_submitted": SubmissionStatus.STARTED_NOT_SUBMITTED,
     "not_started":           SubmissionStatus.NOT_STARTED,
 }
 
 
 # ---------------------------------------------------------------------------
-# Core batch grading
+# Batch grading
 # ---------------------------------------------------------------------------
 
 def grade_scraped_submissions(
     scraped: dict[str, list[ScrapedSubmission]],
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> dict[str, StudentUnitResult]:
-    """
-    Grade all scraped submissions.
-
-    Args:
-        scraped: Output of scrape_all_assignments() —
-                 {assignment_id: [ScrapedSubmission, ...]}
-
-    Returns:
-        {student_name: StudentUnitResult}
-    """
     all_students: dict[str, StudentUnitResult] = {}
 
     for assignment_id, submissions in scraped.items():
         assignment_cfg = _ASSIGNMENT_LOOKUP.get(assignment_id)
         if assignment_cfg is None:
             if progress_callback:
-                progress_callback(
-                    f"⚠  No config found for assignment_id '{assignment_id}' — skipping"
-                )
+                progress_callback(f"⚠  No config for '{assignment_id}' — skipping")
             continue
 
         if progress_callback:
@@ -158,19 +134,13 @@ def grade_scraped_submissions(
 
 
 # ---------------------------------------------------------------------------
-# Compute composite unit grades per run
+# Composite grade calculation
 # ---------------------------------------------------------------------------
 
 def compute_run_grades(
     all_students: dict[str, StudentUnitResult],
-    runs: dict[str, list[str]],  # {run_name: [assignment_id, ...]}
+    runs: dict[str, list[str]],
 ) -> None:
-    """
-    For each named run, compute the weighted average unit grade and store it
-    on each StudentUnitResult.run_grades[run_name].
-
-    Modifies all_students in-place.
-    """
     for student_name, student_result in all_students.items():
         result_by_id = {r.assignment_id: r for r in student_result.assignment_results}
 
@@ -199,29 +169,20 @@ def compute_run_grades(
 
 
 # ---------------------------------------------------------------------------
-# Full pipeline: scrape → grade → compute runs
+# Full pipeline
 # ---------------------------------------------------------------------------
 
 async def run_full_pipeline(
     username: str,
     password: str,
-    assignment_urls: dict[str, str],
+    gradebook_url: str,
+    assignment_ids: list[str],
     runs: dict[str, list[str]],
     progress_callback: Optional[Callable[[str], None]] = None,
     headless: bool = False,
 ) -> dict[str, StudentUnitResult]:
     """
-    Complete pipeline from TechSmart login to per-student graded results.
-
-    Args:
-        username:         TechSmart teacher login email/username
-        password:         TechSmart teacher password
-        assignment_urls:  {assignment_id: techsmart_url}
-        runs:             {run_name: [assignment_id, ...]} — defines composite grades
-        progress_callback: Called with status strings throughout
-
-    Returns:
-        {student_name: StudentUnitResult}
+    Complete pipeline: login → discover URLs → scrape → grade → compute grades.
     """
     if progress_callback:
         progress_callback("=" * 50)
@@ -231,14 +192,15 @@ async def run_full_pipeline(
     scraped = await scrape_all_assignments(
         username=username,
         password=password,
-        assignment_urls=assignment_urls,
+        gradebook_url=gradebook_url,
+        assignment_ids=assignment_ids,
         progress_callback=progress_callback,
         headless=headless,
     )
 
     if progress_callback:
-        total_subs = sum(len(v) for v in scraped.values())
-        progress_callback(f"\n✓ Scraping complete — {total_subs} total submissions\n")
+        total = sum(len(v) for v in scraped.values())
+        progress_callback(f"\n✓ Scraping complete — {total} total submissions\n")
         progress_callback("=" * 50)
         progress_callback("STEP 2 — Grading submissions")
         progress_callback("=" * 50)
