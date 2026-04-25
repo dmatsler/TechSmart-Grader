@@ -1,8 +1,31 @@
+# Python
 __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
-__pycache__/
-*.pyc
-.venv/
+
+# Secrets — API keys, TechSmart credentials
 .env
+
+# Locally cached TechSmart curriculum (requirements + starter + solution code)
+# Scraped from platform.techsmart.codes — their copyrighted material
+context_cache_*.json
+
+# User-specific state — class IDs, saved run configs, active unit
+gradebook_url_*.json
+saved_runs*.json
+active_unit.json
+
+# Grading reports — student names + grades (FERPA)
+# Default output is ~/Desktop/techsmart_grades but in case you ever
+# point the GUI's output folder inside the repo
+grades_*.csv
+grades_*.html
+grades_detail_*.csv
+DO_NOT_SHARE_*.json
+techsmart_grades/
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
