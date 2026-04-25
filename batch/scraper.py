@@ -43,6 +43,21 @@ ASSIGNMENT_TITLE_MAP = {
     "3_3_healthful_ufo_healthfulufo_solution_py":           "Healthful UFO",
     "3_3_stick_dance_smooth_stickdancesmooth_solution_py":  "Stick Dance: Smooth",
     "3_3_bouncing_ball_bouncingball_solution_py":           "Bouncing Ball",
+    # Unit 3.5 — Mouse & Keyboard
+    "3_5_saving_a_tuple_1_technique1practice1_py":        "Saving a Tuple (1)",
+    "3_5_saving_a_tuple_2_technique1practice2_py":        "Saving a Tuple (2)",
+    "3_5_follow_mouse_1_technique2practice1_py":          "Follow Mouse (1)",
+    "3_5_follow_mouse_2_technique2practice2_py":          "Follow Mouse (2)",
+    "3_5_check_event_key_1_technique3practice1_py":       "Check Event Key (1)",
+    "3_5_check_event_key_2_technique3practice2_py":       "Check Event Key (2)",
+    "3_5_move_arrow_keys_1_technique4practice1_py":       "Move With Arrow Keys (1)",
+    "3_5_move_arrow_keys_2_technique4practice2_py":       "Move With Arrow Keys (2)",
+    "3_5_sports_hero_sportshero_py":                      "Sports Hero",
+    "3_5_virtual_jumprope_virtualjumprope_py":            "Virtual Jumprope",
+    "3_5_custom_cursor_customcursor_py":                  "Custom Cursor",
+    "3_5_zen_flycatcher_zenflycatcher_py":                "Zen Flycatcher",
+    "3_5_color_picker_colorpicker_py":                    "Color Picker",
+    "3_5_code_your_own_cyo3_5_py":                        "3.5 Code Your Own",
 }
 
 
@@ -304,9 +319,10 @@ async def scrape_assignment(
     assignment_url: str,
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> list[ScrapedSubmission]:
-    await page.goto(assignment_url)
-    await page.wait_for_load_state("networkidle")
+    await page.goto(assignment_url, wait_until="networkidle")
     await page.wait_for_selector(".CodeMirror", timeout=20_000)
+    # Extra settle time — TechSmart's MDL buttons need time to become interactive
+    await page.wait_for_timeout(1500)
 
     students = await _get_student_list(page)
     if not students:
@@ -336,12 +352,41 @@ async def scrape_assignment(
         if progress_callback:
             progress_callback(f"{label}...")
 
-        await page.click("#ts-teacher-quick-grade-student-button")
-        await page.wait_for_selector(
-            "ul.mdl-menu.mdl-js-menu"
-            "[for='ts-teacher-quick-grade-student-button']",
-            state="visible", timeout=5_000
-        )
+        # Attempt click — reload page and retry once if it times out
+        _click_ok = False
+        for _attempt in range(2):
+            try:
+                await page.click("#ts-teacher-quick-grade-student-button",
+                                 timeout=15_000)
+                await page.wait_for_selector(
+                    "ul.mdl-menu.mdl-js-menu"
+                    "[for='ts-teacher-quick-grade-student-button']",
+                    state="visible", timeout=5_000
+                )
+                _click_ok = True
+                break
+            except Exception:
+                if _attempt == 0:
+                    # First failure — reload and try once more
+                    try:
+                        await page.goto(assignment_url, wait_until="networkidle")
+                        await page.wait_for_selector(".CodeMirror", timeout=15_000)
+                        await page.wait_for_timeout(2000)
+                    except Exception:
+                        pass
+                else:
+                    break
+
+        if not _click_ok:
+            if progress_callback:
+                progress_callback(f"{label} — click failed after reload (skipped)")
+            results.append(ScrapedSubmission(
+                student_name=name,
+                submission_url=assignment_url,
+                code="",
+                ts_status=status,
+            ))
+            continue
 
         all_name_spans = page.locator(
             "ul.mdl-menu[for='ts-teacher-quick-grade-student-button'] "
@@ -449,6 +494,9 @@ async def scrape_all_assignments(
                 if progress_callback:
                     progress_callback(f"   ✗ Error: {exc}\n")
                 results[assignment_id] = []
+
+            # Breathing pause between assignments — lets TechSmart settle
+            await page.wait_for_timeout(2000)
 
         await browser.close()
 

@@ -2,11 +2,11 @@
 Report generator — writes grading results to CSV and a simple HTML summary.
 
 CSV format:
-  Student | Run1_Grade | Run2_Grade | ... | Assign1_Score | Assign1_Points | ...
+  Student | Run1_Grade | Run2_Grade | ... | Assign1_Score | Assign1_Points | Assign1_Flag | ...
 
 HTML format:
   A clean table version of the CSV, color-coded by score (0=red, 1=yellow,
-  2=light-green, 3=green), viewable in any browser.
+  2=light-green, 3=green), with ⚠ indicators on flagged/teacher-reviewed cells.
 """
 from __future__ import annotations
 
@@ -18,17 +18,16 @@ from pathlib import Path
 from batch.batch_runner import StudentUnitResult
 
 # ---------------------------------------------------------------------------
-# CSV
+# CSV — summary (one row per student)
 # ---------------------------------------------------------------------------
 
 def write_csv(
     all_students: dict[str, StudentUnitResult],
-    runs: dict[str, list[str]],          # {run_name: [assignment_id, ...]}
+    runs: dict[str, list[str]],
     output_path: Path,
 ) -> Path:
     """Write a flat CSV with one row per student."""
 
-    # Collect all assignment IDs that were actually graded (in order)
     all_assignment_ids: list[str] = []
     seen: set[str] = set()
     for student in all_students.values():
@@ -37,7 +36,6 @@ def write_csv(
                 all_assignment_ids.append(ar.assignment_id)
                 seen.add(ar.assignment_id)
 
-    # Build header
     header = ["Student"]
     for run_name in runs:
         header.append(f"{run_name} Grade")
@@ -46,6 +44,7 @@ def write_csv(
         header.append(f"{short} Score (0-3)")
         header.append(f"{short} Points")
         header.append(f"{short} Status")
+        header.append(f"{short} Flag")          # ← new column
 
     rows: list[list] = []
     for student_name in sorted(all_students.keys()):
@@ -61,8 +60,9 @@ def write_csv(
                 row.append(ar.rubric_score)
                 row.append(ar.points)
                 row.append(ar.ts_status)
+                row.append(_flag_cell_text(ar))
             else:
-                row.extend(["", "", ""])
+                row.extend(["", "", "", ""])
         rows.append(row)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -75,15 +75,18 @@ def write_csv(
 
 
 # ---------------------------------------------------------------------------
-# HTML
+# HTML — color-coded summary table
 # ---------------------------------------------------------------------------
 
 _SCORE_COLORS = {
-    0: "#ffcccc",   # light red
-    1: "#fff3cd",   # amber
-    2: "#d4edda",   # light green
-    3: "#c3e6cb",   # green
+    0: "#ffcccc",
+    1: "#fff3cd",
+    2: "#d4edda",
+    3: "#c3e6cb",
 }
+_PENDING_COLOR  = "#ffe0b2"   # orange — flagged but not yet confirmed
+_REVIEWED_COLOR = "#e8f5e9"   # pale green — teacher confirmed after flag
+
 
 def write_html(
     all_students: dict[str, StudentUnitResult],
@@ -102,6 +105,13 @@ def write_html(
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
 
+    # Count flagged submissions for the summary banner
+    total_flagged   = sum(1 for s in all_students.values()
+                          for ar in s.assignment_results if ar.flag_reasons)
+    total_pending   = sum(1 for s in all_students.values()
+                          for ar in s.assignment_results if ar.pending)
+    total_confirmed = total_flagged - total_pending
+
     lines: list[str] = [
         "<!DOCTYPE html>",
         "<html><head>",
@@ -110,6 +120,8 @@ def write_html(
         "<style>",
         "  body { font-family: Arial, sans-serif; font-size: 13px; margin: 20px; }",
         "  h1 { font-size: 18px; }",
+        "  .banner { background:#fffbeb; border:1px solid #f59e0b; border-radius:6px;",
+        "            padding:8px 14px; margin-bottom:14px; font-size:13px; color:#78350f; }",
         "  table { border-collapse: collapse; width: 100%; }",
         "  th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: center; white-space: nowrap; }",
         "  th { background: #333; color: #fff; }",
@@ -119,9 +131,25 @@ def write_html(
         "  .s1 { background: #fff3cd; }",
         "  .s2 { background: #d4edda; }",
         "  .s3 { background: #c3e6cb; }",
+        "  .flagged  { background: #ffe0b2; }",   # pending / unconfirmed
+        "  .reviewed { background: #e8f5e9; }",   # teacher confirmed after flag
+        "  .flag-icon { font-size:10px; margin-left:3px; }",
         "</style>",
         "</head><body>",
         f"<h1>TechSmart Grade Report — Generated {timestamp}</h1>",
+    ]
+
+    # Summary banner if any flags exist
+    if total_flagged > 0:
+        lines.append("<div class='banner'>")
+        lines.append(
+            f"⚠ {total_flagged} submission(s) were flagged for integrity review. "
+            f"{total_confirmed} confirmed by teacher. "
+            f"{total_pending} still pending (excluded from grades below)."
+        )
+        lines.append("</div>")
+
+    lines += [
         "<table>",
         "<thead><tr>",
         "  <th>Student</th>",
@@ -148,11 +176,14 @@ def write_html(
         for aid in all_assignment_ids:
             ar = result_by_id.get(aid)
             if ar:
-                score_class = f"s{ar.rubric_score}"
-                tooltip = html.escape(ar.explanation[:120] if ar.explanation else "")
+                cell_class, icon, tooltip = _cell_style(ar)
+                feedback = getattr(ar, "student_feedback", "")
+                full_tooltip = tooltip
+                if feedback:
+                    full_tooltip = tooltip + " | FEEDBACK: " + html.escape(feedback[:80])
                 lines.append(
-                    f"  <td class='{score_class}' title='{tooltip}'>"
-                    f"{ar.rubric_score}/3 ({ar.points}pt)</td>"
+                    f"  <td class='{cell_class}' title='{full_tooltip}'>"
+                    f"{ar.rubric_score}/3 ({ar.points}pt){icon}</td>"
                 )
             else:
                 lines.append("  <td>—</td>")
@@ -167,24 +198,20 @@ def write_html(
 
 
 # ---------------------------------------------------------------------------
-# Detailed per-student breakdown (optional second CSV)
+# CSV — detailed per-(student, assignment) breakdown
 # ---------------------------------------------------------------------------
 
 def write_detail_csv(
     all_students: dict[str, StudentUnitResult],
     output_path: Path,
 ) -> Path:
-    """
-    Write a detailed CSV with one row per (student, assignment) pair.
-    Includes explanation text, matched zones, failures — useful for reviewing
-    edge cases and calibrating the grader.
-    """
+    """Write a detailed CSV with one row per (student, assignment) pair."""
     header = [
         "Student", "Assignment", "TechSmart Status",
         "Rubric Score", "Points",
-        "Matched Zones", "Unmet Zones",
-        "Guardrail Failures", "Requirement Failures",
+        "Flag Status", "Flag Reasons",
         "Explanation",
+        "Student Feedback",      # ← AI-generated feedback for the student
     ]
 
     rows = []
@@ -197,11 +224,10 @@ def write_detail_csv(
                 ar.ts_status,
                 ar.rubric_score,
                 ar.points,
-                "; ".join(ar.matched_zones),
-                "; ".join(ar.unmet_zones),
-                "; ".join(ar.guardrail_failures),
-                "; ".join(ar.requirement_failures),
+                _flag_cell_text(ar),
+                " | ".join(ar.flag_reasons),
                 ar.explanation,
+                getattr(ar, "student_feedback", ""),
             ])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -217,18 +243,46 @@ def write_detail_csv(
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _flag_cell_text(ar) -> str:
+    """Return the flag status string for CSV cells."""
+    if not ar.flag_reasons:
+        return "Auto-confirmed"
+    if ar.pending:
+        return "⚠ Pending review"
+    return "⚠ Teacher reviewed"
+
+
+def _cell_style(ar) -> tuple[str, str, str]:
+    """Return (css_class, icon_html, tooltip_text) for an HTML table cell."""
+    explanation = html.escape(ar.explanation[:120] if ar.explanation else "")
+
+    if ar.pending:
+        tooltip = "PENDING — " + html.escape("; ".join(ar.flag_reasons[:2]))
+        return "flagged", "<span class='flag-icon'>⚠</span>", tooltip
+
+    if ar.flag_reasons:
+        # Teacher confirmed after flag
+        tooltip = "Reviewed — " + explanation
+        return "reviewed", "<span class='flag-icon'>✔</span>", tooltip
+
+    score_class = f"s{ar.rubric_score}"
+    return score_class, "", explanation
+
+
 def _short_name(assignment_id: str) -> str:
     """Shorten an assignment_id to a readable column header."""
-    # e.g. "3_3_animating_shapes_1_technique1practice1_py" → "Anim Shapes 1"
     parts = assignment_id.split("_")
-    # Drop numeric prefix (3_3) and file-name suffix (techniqueXpracticeY_py)
-    # Keep the middle descriptive words
     skip_prefixes = {"3", "py"}
     meaningful = []
-    for p in parts[2:]:  # skip leading "3_3"
+    for p in parts[2:]:
         if p.lower() in skip_prefixes:
             continue
-        if p.startswith("technique") or p.startswith("practice") or p.startswith("stickdance") or p.startswith("healthful") or p.startswith("bouncing"):
+        if p.startswith("technique") or p.startswith("practice") or \
+           p.startswith("stickdance") or p.startswith("healthful") or \
+           p.startswith("bouncing") or p.startswith("sportshero") or \
+           p.startswith("virtualjumprope") or p.startswith("customcursor") or \
+           p.startswith("zenflycatcher") or p.startswith("colorpicker") or \
+           p.startswith("cyo"):
             break
         meaningful.append(p.capitalize())
     return " ".join(meaningful) if meaningful else assignment_id

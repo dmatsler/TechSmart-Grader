@@ -1,34 +1,120 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="card">
-  <h2>Unit Grade Calculator</h2>
-  <p><strong>Current unit grade:</strong> <span class="score-badge">{{ unit_grade }}</span></p>
 
+<!-- Unit selector -->
+<section class="card unit-selector-bar">
+  <form action="/select-unit" method="post" class="unit-selector-form">
+    <label for="unit_slug_ug" class="unit-selector-label">Active Unit:</label>
+    <select id="unit_slug_ug" name="unit_slug" onchange="this.form.submit()">
+      {% for slug, info in unit_registry.items() %}
+      <option value="{{ slug }}" {% if slug == active_unit %}selected{% endif %}>{{ info.label }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Unit Grade Calculator — {{ active_unit_label }}</h2>
+
+  {% set pending_count = entries | selectattr("pending") | list | length %}
+  {% if pending_count > 0 %}
+  <div class="pending-notice">
+    <span class="flag-icon">⚠️</span>
+    <strong>{{ pending_count }} submission{{ 's' if pending_count > 1 else '' }} pending review.</strong>
+    Pending submissions are excluded from the unit average until confirmed.
+    Confirm them below or return to the result page to review the details.
+  </div>
+  {% endif %}
+
+  <p class="unit-grade-display">
+    Current unit grade:
+    <span class="score-badge">{{ unit_grade }}</span>
+    <span class="grade-note">(confirmed submissions only)</span>
+  </p>
+
+  <!-- Pending review table -->
+  {% set pending_entries = entries | selectattr("pending") | list %}
+  {% if pending_entries %}
+  <h3 class="section-subhead">⚠️ Pending Review</h3>
+  <table class="pending-table">
+    <thead>
+      <tr>
+        <th>Assignment</th>
+        <th>Computed Score</th>
+        <th>Flag Reasons</th>
+        <th>Set Score &amp; Confirm</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in pending_entries | sort(attribute="assignment_label") %}
+      <tr class="pending-row">
+        <td>{{ entry.assignment_label }}</td>
+        <td>
+          <span class="score-badge-sm">{{ entry.computed_rubric_score }} / 3</span>
+          <span class="pts-hint">({{ entry.points }} pts)</span>
+        </td>
+        <td class="flag-cell">
+          <ul class="flag-reasons-inline">
+            {% for r in entry.flag_reasons %}
+            <li>{{ r }}</li>
+            {% endfor %}
+          </ul>
+        </td>
+        <td>
+          <form action="/confirm" method="post" class="inline-confirm-form">
+            <input type="hidden" name="assignment_id" value="{{ entry.assignment_id }}" />
+            <div class="inline-confirm-row">
+              <select name="override_score" class="inline-score-select">
+                {% for score, pts in points_map.items() | sort %}
+                <option value="{{ score }}"
+                  {% if score == entry.computed_rubric_score %}selected{% endif %}>
+                  {{ score }}/3 ({{ pts }}pts)
+                </option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn-confirm-sm">✔ Confirm</button>
+            </div>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!-- Confirmed assignments include/exclude table -->
+  {% set confirmed_entries = entries | rejectattr("pending") | list %}
+  <h3 class="section-subhead">Confirmed Submissions</h3>
+  {% if confirmed_entries %}
   <form action="/unit-grade" method="post">
     <table>
       <thead>
         <tr>
-          <th>Include</th>
+          <th>Include in Average</th>
           <th>Assignment</th>
           <th>Points</th>
           <th>Weight</th>
         </tr>
       </thead>
       <tbody>
-        {% for entry in entries %}
+        {% for entry in confirmed_entries | sort(attribute="assignment_label") %}
         <tr>
-          <td><input type="checkbox" name="include" value="{{ entry.assignment_id }}" {% if entry.assignment_id in included_ids %}checked{% endif %}></td>
+          <td>
+            <input type="checkbox" name="include" value="{{ entry.assignment_id }}"
+              {% if entry.assignment_id in included_ids %}checked{% endif %}>
+          </td>
           <td>{{ entry.assignment_label }}</td>
           <td>{{ entry.points }}</td>
           <td>{{ entry.weight }}</td>
         </tr>
-        {% else %}
-        <tr><td colspan="4">No graded assignments in this session yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
     <button type="submit">Recalculate Unit Grade</button>
   </form>
+  {% else %}
+  <p class="empty-note">No confirmed submissions yet. Grade submissions and confirm any flagged ones above.</p>
+  {% endif %}
 
   <form action="/reset" method="post" class="top-gap">
     <button type="submit" class="secondary">Reset Session Grades</button>

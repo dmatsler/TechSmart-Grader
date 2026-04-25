@@ -9,8 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.config_loader import assignment_lookup, load_config
-from app.grader import grade_submission
+from app.ai_grader import grade_submission
+from app.config_loader import UNIT_REGISTRY, get_assignment_context, get_unit_assignments
 from app.models import GradingInput, SubmissionStatus, UnitGradeEntry
 from app.unit_grade import calculate_unit_grade
 
@@ -21,26 +21,10 @@ app.add_middleware(SessionMiddleware, secret_key="techsmart-mvp-secret")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-CONFIG = load_config(
-    BASE_DIR / "unit_3_3_animation_grading_config_working.yaml",
-    BASE_DIR / "unit_3_3_animation_grading_config_working.json",
-)
-ASSIGNMENTS = assignment_lookup(CONFIG)
-SELECTABLE_ASSIGNMENT_IDS = {
-    "3_3_animating_shapes_1_technique1practice1_py",
-    "3_3_animating_shapes_2_technique1practice2_py",
-    "3_3_animating_rect_shapes_1_technique2practice1_py",
-    "3_3_animating_rect_shapes_2_technique2practice2_py",
-    "3_3_adjust_animation_speed_1_technique3practice1_py",
-    "3_3_adjust_animation_speed_2_technique3practice2_py",
-    "3_3_backgrounds_and_trails_1_technique4practice1_py",
-    "3_3_backgrounds_and_trails_2_technique4practice2_py",
-    "3_3_stick_dance_random_stickdancerandom_solution_py",
-    "3_3_healthful_ufo_healthfulufo_solution_py",
-    "3_3_stick_dance_smooth_stickdancesmooth_solution_py",
-    "3_3_bouncing_ball_bouncingball_solution_py",
-}
-SELECTABLE_ASSIGNMENTS = [a for a in CONFIG.assignments if a.id in SELECTABLE_ASSIGNMENT_IDS]
+POINTS_MAP = {0: 0, 1: 50, 2: 75, 3: 100}
+
+# ── Session helpers ───────────────────────────────────────────────────────────
+
 SESSION_RESULTS: dict[str, list[UnitGradeEntry]] = {}
 
 
@@ -52,18 +36,53 @@ def _session_key(request: Request) -> str:
     return sid
 
 
-def _entry_by_id(entries: list[UnitGradeEntry]) -> dict[str, UnitGradeEntry]:
-    return {entry.assignment_id: entry for entry in entries}
+def _active_unit(request: Request) -> str:
+    return request.session.get("active_unit", "3_3")
 
+
+def _unit_entries(request: Request, unit_slug: str) -> list[UnitGradeEntry]:
+    sid = _session_key(request)
+    key = f"{sid}:{unit_slug}"
+    return SESSION_RESULTS.setdefault(key, [])
+
+
+def _save_unit_entries(request: Request, unit_slug: str, entries: list[UnitGradeEntry]) -> None:
+    sid = _session_key(request)
+    SESSION_RESULTS[f"{sid}:{unit_slug}"] = entries
+
+
+def _entry_by_id(entries: list[UnitGradeEntry]) -> dict[str, UnitGradeEntry]:
+    return {e.assignment_id: e for e in entries}
+
+
+# ── Unit selector ─────────────────────────────────────────────────────────────
+
+@app.post("/select-unit")
+async def select_unit(request: Request, unit_slug: str = Form(...)) -> RedirectResponse:
+    if unit_slug not in UNIT_REGISTRY:
+        raise HTTPException(status_code=400, detail="Unknown unit")
+    request.session["active_unit"] = unit_slug
+    return RedirectResponse("/", status_code=303)
+
+
+# ── Grade submission ──────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request) -> HTMLResponse:
+    unit_slug = _active_unit(request)
+    assignments = get_unit_assignments(unit_slug)
     return templates.TemplateResponse(
         request,
         "index.html",
         {
-            "assignments": SELECTABLE_ASSIGNMENTS,
+            "assignments": [
+                type("A", (), {"id": aid, "display_name": title})()
+                for aid, title in assignments
+            ],
             "statuses": [s.value for s in SubmissionStatus],
+            "unit_registry": UNIT_REGISTRY,
+            "active_unit": unit_slug,
+            "active_unit_label": UNIT_REGISTRY[unit_slug]["label"],
         },
     )
 
@@ -77,9 +96,7 @@ async def grade(
     techsmart_lines_completed: int | None = Form(default=None),
     techsmart_lines_expected: int | None = Form(default=None),
 ) -> HTMLResponse:
-    assignment = ASSIGNMENTS.get(assignment_id)
-    if assignment is None:
-        raise HTTPException(status_code=400, detail="Unknown assignment id")
+    unit_slug = _active_unit(request)
 
     payload = GradingInput(
         assignment_id=assignment_id,
@@ -88,38 +105,70 @@ async def grade(
         techsmart_lines_completed=techsmart_lines_completed,
         techsmart_lines_expected=techsmart_lines_expected,
     )
-    result = grade_submission(assignment, payload)
 
-    sid = _session_key(request)
-    entries = SESSION_RESULTS.setdefault(sid, [])
-    existing = _entry_by_id(entries).get(assignment.id)
-    include_default = assignment.count_in_unit_grade_default if existing is None else existing.include
+    # Load context from cache (may be None if cache not yet populated)
+    context = get_assignment_context(unit_slug, assignment_id)
+
+    result = grade_submission(assignment_id, payload, context)
+
+    entries = _unit_entries(request, unit_slug)
+    existing = _entry_by_id(entries).get(assignment_id)
+    include_default = False if existing is None else existing.include
 
     entry = UnitGradeEntry(
-        assignment_id=assignment.id,
-        assignment_label=assignment.display_name,
+        assignment_id=assignment_id,
+        assignment_label=result.assignment_title,
         points=result.points,
         include=include_default,
-        weight=assignment.weight,
+        weight=1.0,
+        pending=not result.confirmed,
+        flag_reasons=result.flag_reasons,
+        computed_rubric_score=result.rubric_score,
     )
-    SESSION_RESULTS[sid] = [e for e in entries if e.assignment_id != entry.assignment_id] + [entry]
+    updated = [e for e in entries if e.assignment_id != assignment_id] + [entry]
+    _save_unit_entries(request, unit_slug, updated)
 
     return templates.TemplateResponse(
         request,
         "result.html",
         {
             "result": result,
-            "points_map": assignment.rubric_to_points_default,
+            "points_map": POINTS_MAP,
+            "active_unit_label": UNIT_REGISTRY[unit_slug]["label"],
         },
     )
 
 
+# ── Confirm flagged submission ────────────────────────────────────────────────
+
+@app.post("/confirm")
+async def confirm_grade(
+    request: Request,
+    assignment_id: str = Form(...),
+    override_score: int = Form(...),
+) -> RedirectResponse:
+    unit_slug = _active_unit(request)
+    entries = _unit_entries(request, unit_slug)
+    for entry in entries:
+        if entry.assignment_id == assignment_id:
+            entry.points = POINTS_MAP.get(override_score, 0)
+            entry.computed_rubric_score = override_score
+            entry.pending = False
+            entry.flag_reasons = []
+            break
+    _save_unit_entries(request, unit_slug, entries)
+    return RedirectResponse("/unit-grade", status_code=303)
+
+
+# ── Unit grade ────────────────────────────────────────────────────────────────
+
 @app.get("/unit-grade", response_class=HTMLResponse)
 async def unit_grade_page(request: Request) -> HTMLResponse:
-    sid = _session_key(request)
-    entries = SESSION_RESULTS.get(sid, [])
-    include_ids = {e.assignment_id for e in entries if e.include}
-    avg = calculate_unit_grade(entries, include_ids)
+    unit_slug = _active_unit(request)
+    entries = _unit_entries(request, unit_slug)
+    confirmed = [e for e in entries if not e.pending]
+    include_ids = {e.assignment_id for e in confirmed if e.include}
+    avg = calculate_unit_grade(confirmed, include_ids)
     return templates.TemplateResponse(
         request,
         "unit_grade.html",
@@ -127,21 +176,26 @@ async def unit_grade_page(request: Request) -> HTMLResponse:
             "entries": sorted(entries, key=lambda x: x.assignment_label),
             "unit_grade": avg,
             "included_ids": include_ids,
+            "unit_registry": UNIT_REGISTRY,
+            "active_unit": unit_slug,
+            "active_unit_label": UNIT_REGISTRY[unit_slug]["label"],
+            "points_map": POINTS_MAP,
         },
     )
 
 
 @app.post("/unit-grade", response_class=HTMLResponse)
 async def unit_grade_recalc(request: Request) -> HTMLResponse:
-    sid = _session_key(request)
+    unit_slug = _active_unit(request)
     form = await request.form()
-    entries = SESSION_RESULTS.get(sid, [])
+    entries = _unit_entries(request, unit_slug)
     include_ids = {v for k, v in form.multi_items() if k == "include"}
-
     for entry in entries:
-        entry.include = entry.assignment_id in include_ids
-
-    avg = calculate_unit_grade(entries, include_ids)
+        if not entry.pending:
+            entry.include = entry.assignment_id in include_ids
+    confirmed = [e for e in entries if not e.pending]
+    avg = calculate_unit_grade(confirmed, include_ids)
+    _save_unit_entries(request, unit_slug, entries)
     return templates.TemplateResponse(
         request,
         "unit_grade.html",
@@ -149,6 +203,10 @@ async def unit_grade_recalc(request: Request) -> HTMLResponse:
             "entries": sorted(entries, key=lambda x: x.assignment_label),
             "unit_grade": avg,
             "included_ids": include_ids,
+            "unit_registry": UNIT_REGISTRY,
+            "active_unit": unit_slug,
+            "active_unit_label": UNIT_REGISTRY[unit_slug]["label"],
+            "points_map": POINTS_MAP,
         },
     )
 
@@ -160,6 +218,6 @@ async def health() -> dict[str, str]:
 
 @app.post("/reset")
 async def reset_session(request: Request) -> RedirectResponse:
-    sid = _session_key(request)
-    SESSION_RESULTS[sid] = []
+    unit_slug = _active_unit(request)
+    _save_unit_entries(request, unit_slug, [])
     return RedirectResponse("/unit-grade", status_code=303)

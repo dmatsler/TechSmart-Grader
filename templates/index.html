@@ -1,7 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
+
+<!-- Unit selector -->
+<section class="card unit-selector-bar">
+  <form action="/select-unit" method="post" class="unit-selector-form">
+    <label for="unit_slug" class="unit-selector-label">Active Unit:</label>
+    <select id="unit_slug" name="unit_slug" onchange="this.form.submit()">
+      {% for slug, info in unit_registry.items() %}
+      <option value="{{ slug }}" {% if slug == active_unit %}selected{% endif %}>{{ info.label }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</section>
+
 <section class="card">
-  <h2>Grade CS101 Unit 3.3 Submission</h2>
+  <h2>Grade Submission — {{ active_unit_label }}</h2>
   <form action="/grade" method="post">
     <label for="assignment_id">Assignment</label>
     <select id="assignment_id" name="assignment_id" required>
@@ -20,16 +33,20 @@
     <div class="grid-2">
       <div>
         <label for="techsmart_lines_completed">TechSmart lines completed (optional)</label>
-        <input id="techsmart_lines_completed" type="number" name="techsmart_lines_completed" min="0" />
+        <input id="techsmart_lines_completed" type="number" name="techsmart_lines_completed" min="0"
+               placeholder="e.g. 45" />
       </div>
       <div>
         <label for="techsmart_lines_expected">TechSmart lines expected (optional)</label>
-        <input id="techsmart_lines_expected" type="number" name="techsmart_lines_expected" min="0" />
+        <input id="techsmart_lines_expected" type="number" name="techsmart_lines_expected" min="0"
+               placeholder="e.g. 30" />
       </div>
     </div>
+    <p class="field-hint">Enter both line fields to enable copy/paste inflation detection.</p>
 
     <label for="student_code">Pasted student code</label>
-    <textarea id="student_code" name="student_code" rows="20" placeholder="Paste student code here..."></textarea>
+    <textarea id="student_code" name="student_code" rows="20"
+              placeholder="Paste student code here..."></textarea>
 
     <button type="submit">Grade Submission</button>
   </form>
