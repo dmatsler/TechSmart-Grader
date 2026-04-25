@@ -1,63 +1,66 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="card">
-  <h2>Grading Result</h2>
+  <h2>Grading Result — {{ active_unit_label }}</h2>
   <p><strong>Assignment:</strong> {{ result.assignment_title }}</p>
   <p><strong>Status:</strong> {{ result.status.value }}</p>
-  <p class="score-badge">Rubric Score: {{ result.rubric_score }} / 3</p>
-  <p class="score-badge">Points: {{ result.points }} / 100</p>
+
+  {% if result.flag_reasons %}
+  <!-- ⚠️ FLAG BANNER — submission held for teacher review -->
+  <div class="flag-banner">
+    <div class="flag-banner-header">
+      <span class="flag-icon">⚠️</span>
+      <strong>Review Required — Score Not Yet Confirmed</strong>
+    </div>
+    <ul class="flag-reasons">
+      {% for reason in result.flag_reasons %}
+      <li>{{ reason }}</li>
+      {% endfor %}
+    </ul>
+    <p class="flag-note">
+      This submission has been held pending your review. The grader's computed score is shown below.
+      Use the override dropdown to set the score you want, then click <strong>Confirm Grade</strong>.
+      Until confirmed, this assignment is <em>excluded</em> from the unit average.
+    </p>
+
+    <form action="/confirm" method="post" class="confirm-form">
+      <input type="hidden" name="assignment_id" value="{{ result.assignment_id }}" />
+      <div class="confirm-row">
+        <label for="override_score" class="confirm-label">Set score:</label>
+        <select id="override_score" name="override_score" class="confirm-select">
+          {% for score, pts in points_map.items() | sort %}
+          <option value="{{ score }}"
+            {% if score == result.rubric_score %}selected{% endif %}>
+            {{ score }} / 3 &nbsp;({{ pts }} pts){% if score == result.rubric_score %} — grader suggestion{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn-confirm">✔ Confirm Grade</button>
+      </div>
+    </form>
+  </div>
+
+  {% else %}
+  <!-- Clean submission — show score normally -->
+  <div class="score-row">
+    <span class="score-badge">Rubric Score: {{ result.rubric_score }} / 3</span>
+    <span class="score-badge">Points: {{ result.points }} / 100</span>
+    <span class="confirmed-badge">✔ Auto-confirmed</span>
+  </div>
+  {% endif %}
 
   <h3>Teacher Explanation</h3>
   <p>{{ result.explanation }}</p>
 
-  <div class="grid-2">
-    <div>
-      <h3>Matched Fill Zones</h3>
-      <ul>
-        {% for item in result.matched_fill_zones %}
-        <li>{{ item }}</li>
-        {% else %}
-        <li>None</li>
-        {% endfor %}
-      </ul>
-    </div>
-    <div>
-      <h3>Unmet Fill Zones</h3>
-      <ul>
-        {% for item in result.unmet_fill_zones %}
-        <li>{{ item }}</li>
-        {% else %}
-        <li>None</li>
-        {% endfor %}
-      </ul>
-    </div>
+  {% if result.student_feedback %}
+  <div class="student-feedback-box">
+    <h3>💬 Student Feedback</h3>
+    <p>{{ result.student_feedback }}</p>
   </div>
+  {% endif %}
 
-  <div class="grid-2">
-    <div>
-      <h3>Coherence Guardrail Failures</h3>
-      <ul>
-        {% for item in result.coherence_guardrail_failures %}
-        <li>{{ item }}</li>
-        {% else %}
-        <li>None</li>
-        {% endfor %}
-      </ul>
-    </div>
-    <div>
-      <h3>Requirement Check Failures</h3>
-      <ul>
-        {% for item in result.requirement_check_failures %}
-        <li>{{ item }}</li>
-        {% else %}
-        <li>None</li>
-        {% endfor %}
-      </ul>
-    </div>
-  </div>
-
-  <p>
-    <a href="/">Grade another submission</a> ·
+  <p class="nav-links">
+    <a href="/">← Grade another submission</a> ·
     <a href="/unit-grade">View Unit Grade</a>
   </p>
 </section>
