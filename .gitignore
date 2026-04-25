@@ -12,7 +12,7 @@ __pycache__/
 context_cache_*.json
 
 # User-specific state — class IDs, saved run configs, active unit
-gradebook_url_*.json
+gradebook_url*.json
 saved_runs*.json
 active_unit.json
 
