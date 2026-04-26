@@ -47,11 +47,33 @@ INTEGRITY RULES — apply these before scoring:
     (more than ~150% of expected), note it as a flag but do not automatically
     reduce the score — use your judgment based on what the code actually does.
   - Code using constructs not taught at this level (classes, decorators, list
-    comprehensions, lambda, unexpected imports like numpy/tkinter) should be
-    flagged as possible AI-generated or copied code. Score the work on its
-    merits but flag it for teacher review.
+    comprehensions, lambda) should be flagged as possible AI-generated or
+    copied code. Score the work on its merits but flag it for teacher review.
+    Do NOT flag imports that appear in the SOLUTION CODE — those are
+    curriculum-standard. Only flag imports that are clearly outside the
+    curriculum (e.g. numpy, requests, tensorflow).
   - Starter/template code alone (code the teacher provided that the student
     did not modify) = score 0 or 1 depending on submission status.
+""".strip()
+
+# ---------------------------------------------------------------------------
+# Curriculum context — what counts as "expected" for TechSmart CS101
+# ---------------------------------------------------------------------------
+
+TECHSMART_CONTEXT = """
+TECHSMART CURRICULUM CONTEXT — read carefully:
+  - This is TechSmart CS101, a middle-school Python/Pygame curriculum.
+  - The 'tsk' module is a TechSmart-provided helper library used throughout
+    this curriculum for keyboard input and other utilities. 'import tsk',
+    'tsk.is_key_down(...)', 'tsk.get_key_pressed(...)' and similar calls
+    are LEGITIMATE and EXPECTED. Do NOT flag tsk as undefined, unknown,
+    non-standard, or AI-generated. It is part of the standard environment
+    for these students.
+  - When evaluating whether an import or library call is "expected," check
+    the SOLUTION CODE first. If the same import or call appears in the
+    solution, it is taught content and must be treated as legitimate.
+  - Other modules that may appear and are expected at this level: pygame,
+    random, tsk. Standard library modules (math, time, etc.) are also fine.
 """.strip()
 
 # ---------------------------------------------------------------------------
@@ -103,6 +125,8 @@ def _build_prompt(
     )
 
     return f"""You are grading a middle school Python/Pygame assignment.
+
+{TECHSMART_CONTEXT}
 
 {requirements_section}{starter_section}{solution_section}
 
