@@ -62,6 +62,47 @@ def _get_rate_limit() -> int:
         return int(cfg.get("calls_per_minute", 25))
     return 25
 
+# ---------------------------------------------------------------------------
+# Cost estimation — empirical $/call rates from real production runs
+# ---------------------------------------------------------------------------
+# Slightly conservative (rounded up from observed rates) so the GUI never
+# under-estimates. Add new (provider, model) entries here as you swap
+# providers. Unknown models silently skip the cost line.
+_COST_PER_CALL_USD: dict[tuple[str, str], float] = {
+    ("openai", "gpt-4o-mini"): 0.0005,  # ~$0.16 / 315 AI calls (Unit 3.5 batch)
+}
+
+
+def _estimate_cost(num_calls: int) -> Optional[str]:
+    """Estimate $ cost for `num_calls` API calls using the active provider/model.
+
+    Reads llm_config.json to know who's serving requests right now. Returns
+    a formatted string like '~$0.12 on openai/gpt-4o-mini' or None if the
+    model isn't in our known-rates table (so the caller can skip the line).
+    Ollama always returns $0.00 since it runs locally.
+    """
+    import json
+    config_path = _ROOT / "llm_config.json"
+    if not config_path.exists():
+        return None
+    try:
+        cfg = json.loads(config_path.read_text())
+    except Exception:
+        return None
+    provider = cfg.get("provider", "").lower()
+    model = cfg.get("model", "")
+
+    if provider == "ollama":
+        return "$0.00 (local Ollama)"
+
+    rate = _COST_PER_CALL_USD.get((provider, model))
+    if rate is None:
+        return None
+    total = num_calls * rate
+    if total < 0.01:
+        return f"<$0.01 on {provider}/{model}"
+    return f"~${total:.2f} on {provider}/{model}"
+
 
 # ---------------------------------------------------------------------------
 # Data models
@@ -151,6 +192,9 @@ async def grade_scraped_submissions(
             f"{total_api_calls} require AI grading, "
             f"{total_all - total_api_calls} auto-scored (not started)"
         )
+        cost_str = _estimate_cost(total_api_calls)
+        if cost_str:
+            progress_callback(f"  Estimated cost: {cost_str}")
 
     completed = 0
     lock = asyncio.Lock()
