@@ -357,15 +357,20 @@ class BatchGraderApp:
             font=("Arial", 9, "bold")
         ).grid(row=0, column=0, padx=4, pady=2)
 
+        # Spacer cells above the per-row [☑ All] [☐ None] buttons.
+        # No header text — the buttons' meaning is self-evident from the icons.
+        Label(self._runs_inner, text="", width=5).grid(row=0, column=1, padx=1)
+        Label(self._runs_inner, text="", width=6).grid(row=0, column=2, padx=1)
+
         for col_idx, (_, label) in enumerate(self._current_assignments):
             Label(
                 self._runs_inner, text=label, width=14, anchor="center",
                 font=("Arial", 9, "bold"), wraplength=90
-            ).grid(row=0, column=col_idx + 1, padx=2, pady=2)
+            ).grid(row=0, column=col_idx + 3, padx=2, pady=2)
 
         Label(
             self._runs_inner, text="", width=3
-        ).grid(row=0, column=len(self._current_assignments) + 1)
+        ).grid(row=0, column=len(self._current_assignments) + 3)
 
         btn_frame = Frame(self._runs_outer)
         btn_frame.pack(fill="x", pady=(4, 0))
@@ -373,14 +378,6 @@ class BatchGraderApp:
             btn_frame, text="+ Add Run", command=self._add_run_row,
             relief="flat", bg="#e0e0e0", padx=8
         ).pack(side="left")
-        tk.Button(
-            btn_frame, text="☑ Select All", command=self._select_all_assignments,
-            relief="flat", bg="#dbeafe", fg="#1d4ed8", padx=8
-        ).pack(side="left", padx=(6, 0))
-        tk.Button(
-            btn_frame, text="☐ Select None", command=self._select_no_assignments,
-            relief="flat", bg="#e5e7eb", padx=8
-        ).pack(side="left", padx=(4, 0))
 
     def _add_run_row(self, name: str = "Run", pre_checked: set[str] | None = None):
         row_idx = len(self._run_rows) + 1
@@ -396,13 +393,33 @@ class BatchGraderApp:
         ).grid(row=row_idx, column=0, padx=4, pady=2)
         row_record["name_var"] = name_var
 
+        # Per-row bulk-toggle buttons — scoped to THIS run only, never global.
+        # Captured row_record via default arg to dodge late-binding closure bugs
+        # (without this, all buttons would point at whichever was the last row
+        # built when the lambda finally fires).
+        all_btn = tk.Button(
+            self._runs_inner, text="☑ All",
+            command=lambda rr=row_record: self._select_all_in_run(rr),
+            relief="flat", bg="#dbeafe", fg="#1d4ed8",
+            font=("Arial", 8), padx=4
+        )
+        all_btn.grid(row=row_idx, column=1, padx=(2, 1))
+
+        none_btn = tk.Button(
+            self._runs_inner, text="☐ None",
+            command=lambda rr=row_record: self._select_none_in_run(rr),
+            relief="flat", bg="#e5e7eb",
+            font=("Arial", 8), padx=4
+        )
+        none_btn.grid(row=row_idx, column=2, padx=(1, 2))
+
         for col_idx, (aid, _) in enumerate(self._current_assignments):
             bv = BooleanVar(value=(pre_checked is not None and aid in pre_checked))
-            # Trace fires when a checkbox is clicked OR when Select All / None
+            # Trace fires when a checkbox is clicked OR when [All]/[None]
             # programmatically calls bv.set(...) — both paths trigger refresh.
             bv.trace_add("write", lambda *_: self._refresh_run_counters())
             cb = tk.Checkbutton(self._runs_inner, variable=bv)
-            cb.grid(row=row_idx, column=col_idx + 1, padx=2)
+            cb.grid(row=row_idx, column=col_idx + 3, padx=2)
             row_record["check_vars"][aid] = bv
 
         def _delete(rr=row_record, ri=row_idx):
@@ -416,7 +433,7 @@ class BatchGraderApp:
             self._runs_inner, text="✕", fg="red", relief="flat",
             command=_delete, font=("Arial", 9), padx=2
         )
-        del_btn.grid(row=row_idx, column=len(self._current_assignments) + 1, padx=2)
+        del_btn.grid(row=row_idx, column=len(self._current_assignments) + 3, padx=2)
         row_record["del_btn"] = del_btn
         self._run_rows.append(row_record)
 
@@ -425,20 +442,18 @@ class BatchGraderApp:
         self._refresh_run_counters()
 
     # -----------------------------------------------------------------------
-    # Select all / none helpers
+    # Per-run select all / none helpers
     # -----------------------------------------------------------------------
 
-    def _select_all_assignments(self):
-        """Check all assignment boxes in every run row."""
-        for rr in self._run_rows:
-            for bv in rr["check_vars"].values():
-                bv.set(True)
+    def _select_all_in_run(self, row_record: dict):
+        """Check every assignment box in a single run row."""
+        for bv in row_record["check_vars"].values():
+            bv.set(True)
 
-    def _select_no_assignments(self):
-        """Uncheck all assignment boxes in every run row."""
-        for rr in self._run_rows:
-            for bv in rr["check_vars"].values():
-                bv.set(False)
+    def _select_none_in_run(self, row_record: dict):
+        """Uncheck every assignment box in a single run row."""
+        for bv in row_record["check_vars"].values():
+            bv.set(False)
 
     # -----------------------------------------------------------------------
     # Per-run counter sidebar
