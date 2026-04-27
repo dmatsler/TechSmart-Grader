@@ -251,14 +251,41 @@ class BatchGraderApp:
     # -----------------------------------------------------------------------
 
     def _build_runs_section(self, parent, saved_runs: list[dict]):
+        """Create the wrapper Frame once and fill it. The wrapper itself
+        is a permanent fixture in the parent's pack order — only its
+        contents get torn down and rebuilt on unit change.
+        """
+        self._runs_wrapper = Frame(parent)
+        self._runs_wrapper.pack(fill="both", padx=10, pady=4)
+        self._runs_parent = parent
+        self._populate_runs_wrapper(saved_runs)
+
+    def _populate_runs_wrapper(self, saved_runs: list[dict]):
+        """Build the runs box + sidebar inside self._runs_wrapper.
+
+        Called both on initial build (from _build_runs_section) and on
+        every unit change (from _rebuild_runs_section). The wrapper is
+        assumed to exist and be empty.
+        """
         self._runs_outer = LabelFrame(
-            parent,
+            self._runs_wrapper,
             text=" Grade Runs  (each row = one composite grade; "
                  "check which assignments to include) ",
             padx=8, pady=6
         )
-        self._runs_outer.pack(fill="both", padx=10, pady=4)
-        self._runs_parent = parent
+        self._runs_outer.pack(side="left", fill="both", expand=True)
+
+        # Right-hand sidebar — live readout of how many boxes each run has checked
+        self._counters_outer = LabelFrame(
+            self._runs_wrapper,
+            text=" Selected ", padx=8, pady=6
+        )
+        self._counters_outer.pack(side="right", fill="y", padx=(8, 0))
+
+        # Inner frame is what we wipe-and-rebuild on every refresh
+        self._counters_inner = Frame(self._counters_outer)
+        self._counters_inner.pack(fill="both", expand=True)
+
         self._init_runs_canvas()
         self._populate_header_row()
         for run in saved_runs:
@@ -266,6 +293,10 @@ class BatchGraderApp:
                 run.get("name", "Run"),
                 set(run.get("included_ids", [])),
             )
+        # Initial paint — handles the empty-runs case (each _add_run_row
+        # call already triggers a refresh, but the loop is a no-op when
+        # there are no saved runs).
+        self._refresh_run_counters()
 
     def _init_runs_canvas(self):
         canvas_frame = Frame(self._runs_outer)
@@ -309,10 +340,16 @@ class BatchGraderApp:
             widget.bind("<Button-5>",         _on_scroll)
 
     def _rebuild_runs_section(self, saved_runs: list[dict]):
-        """Destroy and recreate the runs section (called on unit change)."""
+        """Wipe the runs box + sidebar and rebuild them inside the existing
+        wrapper. The wrapper itself stays put — destroying it would re-pack
+        at the bottom of the parent and break the layout (Progress pane
+        would jump above the runs section).
+        """
         self._run_rows.clear()
-        self._runs_outer.destroy()
-        self._build_runs_section(self._runs_parent, saved_runs)
+        # Clear the wrapper's children but keep the wrapper itself
+        for child in self._runs_wrapper.winfo_children():
+            child.destroy()
+        self._populate_runs_wrapper(saved_runs)
 
     def _populate_header_row(self):
         Label(
@@ -350,6 +387,10 @@ class BatchGraderApp:
         row_record: dict = {"check_vars": {}}
 
         name_var = StringVar(value=name)
+        # Trace fires per-keystroke as the user edits the name — sidebar
+        # updates live so they see "Run A: 5 of 14" become "Warmups: 5 of 14"
+        # as they type.
+        name_var.trace_add("write", lambda *_: self._refresh_run_counters())
         Entry(
             self._runs_inner, textvariable=name_var, width=18
         ).grid(row=row_idx, column=0, padx=4, pady=2)
@@ -357,6 +398,9 @@ class BatchGraderApp:
 
         for col_idx, (aid, _) in enumerate(self._current_assignments):
             bv = BooleanVar(value=(pre_checked is not None and aid in pre_checked))
+            # Trace fires when a checkbox is clicked OR when Select All / None
+            # programmatically calls bv.set(...) — both paths trigger refresh.
+            bv.trace_add("write", lambda *_: self._refresh_run_counters())
             cb = tk.Checkbutton(self._runs_inner, variable=bv)
             cb.grid(row=row_idx, column=col_idx + 1, padx=2)
             row_record["check_vars"][aid] = bv
@@ -366,6 +410,7 @@ class BatchGraderApp:
                 widget.destroy()
             if rr in self._run_rows:
                 self._run_rows.remove(rr)
+            self._refresh_run_counters()
 
         del_btn = tk.Button(
             self._runs_inner, text="✕", fg="red", relief="flat",
@@ -377,6 +422,7 @@ class BatchGraderApp:
 
         self._runs_canvas.update_idletasks()
         self._runs_canvas.configure(scrollregion=self._runs_canvas.bbox("all"))
+        self._refresh_run_counters()
 
     # -----------------------------------------------------------------------
     # Select all / none helpers
@@ -393,6 +439,50 @@ class BatchGraderApp:
         for rr in self._run_rows:
             for bv in rr["check_vars"].values():
                 bv.set(False)
+
+    # -----------------------------------------------------------------------
+    # Per-run counter sidebar
+    # -----------------------------------------------------------------------
+
+    def _refresh_run_counters(self):
+        """Wipe and rebuild the right-hand 'Selected' sidebar.
+
+        Called whenever a checkbox flips, a run name changes, or a run is
+        added or deleted. Cheap at this scale (≤ 10 runs typical), so we
+        rebuild rather than track individual labels.
+        """
+        # Defensive: during unit-switch teardown the inner frame is destroyed
+        # and recreated. If a stray trace fires in between, bail out cleanly.
+        inner = getattr(self, "_counters_inner", None)
+        if inner is None:
+            return
+        try:
+            if not inner.winfo_exists():
+                return
+        except tk.TclError:
+            return
+
+        # Wipe existing labels
+        for w in inner.winfo_children():
+            w.destroy()
+
+        total = len(self._current_assignments)
+
+        if not self._run_rows:
+            Label(
+                inner, text="(no runs)", anchor="w",
+                font=("Arial", 9, "italic"), fg="gray"
+            ).pack(anchor="w", pady=2)
+            return
+
+        for rr in self._run_rows:
+            name = rr["name_var"].get().strip() or "Run"
+            checked = sum(1 for bv in rr["check_vars"].values() if bv.get())
+            Label(
+                inner,
+                text=f"{name}: {checked} of {total}",
+                anchor="w", font=("Arial", 10)
+            ).pack(anchor="w", pady=1)
 
     # -----------------------------------------------------------------------
     # Action row
