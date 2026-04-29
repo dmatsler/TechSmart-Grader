@@ -939,24 +939,34 @@ class BatchGraderApp:
             )
             done_event.set()
 
-        # Buttons use tk.Button with fixed width so they're equal-sized and readable
-        tk.Button(
+        # tk.Label-as-button pattern: native tk.Button on macOS ignores bg/fg
+        # because the OS draws system Aqua buttons. Using Label with raised
+        # relief + manual click binding gives us full color control.
+
+        confirm_btn = tk.Label(
             footer,
             text="✔  Confirm All & Write Reports",
-            command=_on_write,
             bg="#16a34a", fg="white", font=("Arial", 11, "bold"),
             relief="raised", padx=20, pady=12, cursor="hand2",
             width=30, height=2
-        ).pack(side="left", padx=(0, 12))
+        )
+        confirm_btn.pack(side="left", padx=(0, 12))
+        confirm_btn.bind("<Button-1>", lambda e: _on_write())
+        # Hover darkens slightly — same pattern as the main Grade button
+        confirm_btn.bind("<Enter>", lambda e: confirm_btn.config(bg="#15803d"))
+        confirm_btn.bind("<Leave>", lambda e: confirm_btn.config(bg="#16a34a"))
 
-        tk.Button(
+        cancel_btn = tk.Label(
             footer,
             text="Skip Review — Write Reports Now\n(pending stay excluded from grades)",
-            command=_on_cancel,
             bg="#64748b", fg="white", font=("Arial", 11, "bold"),
             relief="raised", padx=20, pady=12, cursor="hand2",
             width=30, height=2
-        ).pack(side="left")
+        )
+        cancel_btn.pack(side="left")
+        cancel_btn.bind("<Button-1>", lambda e: _on_cancel())
+        cancel_btn.bind("<Enter>", lambda e: cancel_btn.config(bg="#475569"))
+        cancel_btn.bind("<Leave>", lambda e: cancel_btn.config(bg="#64748b"))
 
     # -----------------------------------------------------------------------
     # Report writing
