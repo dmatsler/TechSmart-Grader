@@ -173,14 +173,29 @@ class BatchGraderApp:
             "border":            [],
             "text":              [],
             "text_muted":        [],
-            "entry":             [],  # both bg + text
+            "entry":             [],  # both bg + text (+ insertbackground)
             "button_neutral":    [],  # both bg + fg
             "button_action":     [],
             "button_dim":        [],
+            "checkbutton":       [],  # tuples of (widget, bg_slot)
         }
+
+        # Tracks (canvas, rect_id) pairs for the bg rectangles painted by
+        # _make_panel. Theme switch updates these via canvas.itemconfig()
+        # because canvas items aren't widgets — they're drawing primitives
+        # addressed by ID.
+        self._theme_canvas_rects: list[tuple] = []
 
         # Apply theme to root window (overrides macOS system bg)
         root.configure(bg=self._theme["bg"])
+
+        # Switch ttk's theme engine off of macOS "aqua" so style.configure()
+        # actually takes effect for ttk.Combobox in both macOS system modes.
+        # Aqua's renderer overrides our color config when macOS is in dark
+        # system mode, which is why Light Modern dropdowns were unreadable
+        # on a dark-mode mac. "clam" is theme-agnostic and respects configure.
+        # Bounded blast radius: ttk.Combobox is the only ttk widget in this app.
+        ttk.Style().theme_use("clam")
 
         # Current unit's gradeable assignments — rebuilt when unit changes
         self._current_assignments: list[tuple[str, str]] = \
@@ -192,6 +207,14 @@ class BatchGraderApp:
         self._build_runs_section(root, _load_runs(self._active_unit.get()))
         self._build_action_row(root)
         self._build_progress(root)
+
+        # Run one theme-apply pass after all widgets exist. This handles two
+        # things that don't happen during widget construction:
+        #   1. ttk.Style.configure("TCombobox", ...) — the combos get
+        #      clam's defaults until configure() runs at least once.
+        #   2. Idempotent re-confirmation of the registry walk, since the
+        #      same theme that was used at creation time is applied here.
+        self._apply_theme(self._theme_name)
     
 
     # -----------------------------------------------------------------------
@@ -311,6 +334,10 @@ class BatchGraderApp:
         self._theme_widgets["bg_elevated"].append(title_lbl)
         self._theme_widgets["text"].append(title_lbl)
 
+        # Canvas item, not a widget — tracked separately, updated by
+        # _apply_theme via painter.itemconfig(rect_id, fill=...).
+        self._theme_canvas_rects.append((painter, bg_rect_id))
+
         return outer, content
 
 
@@ -319,10 +346,20 @@ class BatchGraderApp:
     # -----------------------------------------------------------------------
 
     def _build_unit_selector(self, parent):
-        outer, frame = self._make_panel(parent, " Active Unit ", padx=8, pady=6)
-        outer.pack(fill="x", padx=10, pady=(8, 2))
+        # Wrapper Frame hosts the Active Unit panel (left, expanding) and
+        # the Theme panel (right, content-width). Same pattern as
+        # _populate_runs_wrapper's Grade Runs + Selected sidebar.
+        self._unit_row_wrapper = Frame(parent, bg=self._theme["bg"])
+        self._unit_row_wrapper.pack(fill="x", padx=10, pady=(8, 2))
+        self._theme_widgets["bg"].append(self._unit_row_wrapper)
 
-        Label(frame, text="Select unit to grade:").grid(
+        # ── Left: Active Unit panel ─────────────────────────────────────────
+        outer, frame = self._make_panel(
+            self._unit_row_wrapper, " Active Unit ", padx=8, pady=6,
+        )
+        outer.pack(side="left", fill="x", expand=True)
+
+        self._themed_label(frame, "Select unit to grade:").grid(
             row=0, column=0, sticky="e", padx=(0, 8)
         )
 
@@ -341,11 +378,32 @@ class BatchGraderApp:
         self._unit_combo.grid(row=0, column=1, sticky="w")
         self._unit_combo.bind("<<ComboboxSelected>>", self._on_unit_changed)
 
-        Label(
+        self._themed_label(
             frame,
-            text="  (changing unit reloads assignment columns and gradebook URL)",
-            fg=self._theme["text_muted"], font=("Arial", 9)
+            "  (changing unit reloads assignment columns and gradebook URL)",
+            fg_slot="text_muted",
+            font=("Arial", 9),
         ).grid(row=0, column=2, sticky="w", padx=8)
+
+        # ── Right: Theme panel (combobox added in Piece B) ──────────────────
+        theme_outer, theme_frame = self._make_panel(
+            self._unit_row_wrapper, " Theme ", padx=8, pady=6,
+        )
+        theme_outer.pack(side="right", fill="y", padx=(8, 0))
+
+        # Populated from THEMES.keys() so adding new themes in Phase 2
+        # (High Contrast variants) automatically extends the dropdown
+        # without touching this method.
+        theme_names = list(THEMES.keys())
+        self._theme_combo = ttk.Combobox(
+            theme_frame,
+            values=theme_names,
+            state="readonly",
+            width=18,
+        )
+        self._theme_combo.current(theme_names.index(self._theme_name))
+        self._theme_combo.pack(padx=4, pady=2)
+        self._theme_combo.bind("<<ComboboxSelected>>", self._on_theme_changed)
 
     def _on_unit_changed(self, event=None):
         unit_slugs = list(UNIT_REGISTRY.keys())
@@ -367,6 +425,188 @@ class BatchGraderApp:
         saved_runs = _load_runs(new_slug)
         self._rebuild_runs_section(saved_runs)
 
+        # Clear the highlighted-text state so the combo doesn't sit visually
+        # "still selected" after the choice is made.
+        self._unit_combo.selection_clear()
+    
+    def _on_theme_changed(self, event=None):
+        """Switch the active theme when the user picks from the dropdown."""
+        new_name = self._theme_combo.get()
+        if new_name == self._theme_name:
+            return
+        self._apply_theme(new_name)
+        self._log_msg(f"[theme] switched to: {new_name}")
+        # Clear the highlighted-text state so the combo doesn't sit visually
+        # "still selected" after the choice is made.
+        self._theme_combo.selection_clear()
+    
+    def _apply_theme(self, name: str):
+        """Walk every theme-registered widget and re-color it for `name`.
+
+        Each slot in self._theme_widgets corresponds to one or two color
+        keys in the palette:
+          - bg, bg_elevated, border   → widget.configure(bg=…)
+          - text, text_muted          → widget.configure(fg=…)
+          - entry                     → both (entry_bg + entry_text)
+          - button_*                  → both (button_*_bg + button_*_fg)
+
+        Canvas-painted bg rectangles are addressed by item ID, so they
+        live in self._theme_canvas_rects and get itemconfig() not
+        widget.configure().
+        """
+        self._theme_name = name
+        self._theme = THEMES[name]
+        t = self._theme  # alias for readability below
+
+        # Root window — one-off, not in the registry.
+        self.root.configure(bg=t["bg"])
+
+        # bg-only slots
+        for w in self._theme_widgets["bg"]:
+            w.configure(bg=t["bg"])
+        for w in self._theme_widgets["bg_elevated"]:
+            w.configure(bg=t["bg_elevated"])
+        for w in self._theme_widgets["border"]:
+            w.configure(bg=t["border"])
+
+        # fg-only slots
+        for w in self._theme_widgets["text"]:
+            w.configure(fg=t["text"])
+        for w in self._theme_widgets["text_muted"]:
+            w.configure(fg=t["text_muted"])
+
+        # bg + fg slots
+        for w in self._theme_widgets["entry"]:
+            w.configure(
+                bg=t["entry_bg"],
+                fg=t["entry_text"],
+                insertbackground=t["entry_text"],
+                highlightbackground=t["border"],
+                highlightcolor=t["border"],
+            )
+        for w in self._theme_widgets["button_neutral"]:
+            w.configure(bg=t["button_neutral_bg"], fg=t["button_neutral_fg"])
+        for w in self._theme_widgets["button_action"]:
+            w.configure(bg=t["button_action_bg"], fg=t["button_action_fg"])
+        for w in self._theme_widgets["button_dim"]:
+            w.configure(bg=t["button_dim_bg"], fg=t["button_dim_fg"])
+
+        # Checkbuttons — each (widget, bg_slot) pair, because per-widget bg
+        # context varies (action-row checkbuttons sit on root bg, run-row
+        # checkbuttons sit inside elevated panels). selectcolor matches bg
+        # so the check box reads as part of its surround.
+        for cb, bg_slot in self._theme_widgets["checkbutton"]:
+            bg = t[bg_slot]
+            cb.configure(
+                bg=bg, fg=t["text"],
+                selectcolor=bg,
+                activebackground=bg, activeforeground=t["text"],
+            )
+
+        # Canvas-painted rectangles (item IDs, not widgets)
+        for canvas, rect_id in self._theme_canvas_rects:
+            canvas.itemconfig(rect_id, fill=t["bg_elevated"])
+
+        # ttk.Combobox — using the "clam" theme engine (set in __init__),
+        # which respects both configure() and map(). The map() call covers
+        # state-specific styling: a state="readonly" combobox uses different
+        # internal style states, and without explicit mapping those states
+        # can override the base configure values.
+        style = ttk.Style()
+        style.configure(
+            "TCombobox",
+            fieldbackground=t["entry_bg"],
+            background=t["bg_elevated"],
+            foreground=t["entry_text"],
+            arrowcolor=t["text"],
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", t["entry_bg"])],
+            background=[("readonly", t["bg_elevated"])],
+            foreground=[("readonly", t["entry_text"])],
+            arrowcolor=[("readonly", t["text"])],
+        )
+
+        # Force-rebuild the dynamic Selected-sidebar counter labels with
+        # current theme colors. They're recreated on every checkbox flip
+        # and run rename, so we don't register them — instead we trigger
+        # a rebuild here so they pick up the new theme.
+        self._refresh_run_counters()
+
+    # -----------------------------------------------------------------------
+    # Themed widget helpers
+    # -----------------------------------------------------------------------
+    #
+    # Each helper creates a widget pre-themed for the current palette and
+    # registers it in the appropriate _theme_widgets slot(s) so it follows
+    # future theme switches. Extra kwargs pass through to the underlying
+    # tk widget unchanged (font, anchor, width, textvariable, etc.).
+    #
+    # Slot parameters are keyword-only (the `*` in each signature) so they
+    # can't collide with regular widget kwargs and so they're explicit at
+    # the call site.
+
+    def _themed_frame(self, parent, *, slot="bg_elevated", **kwargs):
+        """Frame with theme-driven bg. slot is the palette/registry key:
+        'bg_elevated' for panel interiors, 'bg' for root-level layout
+        frames like rows in the action area.
+        """
+        f = Frame(parent, bg=self._theme[slot], **kwargs)
+        self._theme_widgets[slot].append(f)
+        return f
+
+    def _themed_label(self, parent, text, *,
+                      fg_slot="text", bg_slot="bg_elevated", **kwargs):
+        """Label with theme-driven bg + fg. fg_slot is 'text' or
+        'text_muted'; bg_slot is 'bg_elevated' (default, for labels inside
+        panels) or 'bg' (for labels on root-level frames).
+        """
+        lbl = tk.Label(
+            parent, text=text,
+            bg=self._theme[bg_slot], fg=self._theme[fg_slot],
+            **kwargs,
+        )
+        self._theme_widgets[bg_slot].append(lbl)
+        self._theme_widgets[fg_slot].append(lbl)
+        return lbl
+
+    def _themed_entry(self, parent, **kwargs):
+        """Entry with theme-driven bg, fg, insertbackground (cursor color),
+        and highlight border colors. Without explicit highlight colors,
+        macOS draws the Entry's outer frame using *system* colors — so a
+        Light Modern entry on a dark-mode mac picks up a heavy dark frame
+        that visually clashes with the light panel.
+        """
+        e = Entry(
+            parent,
+            bg=self._theme["entry_bg"],
+            fg=self._theme["entry_text"],
+            insertbackground=self._theme["entry_text"],
+            highlightthickness=1,
+            highlightbackground=self._theme["border"],
+            highlightcolor=self._theme["border"],
+            **kwargs,
+        )
+        self._theme_widgets["entry"].append(e)
+        return e
+
+    def _themed_checkbutton(self, parent, *, bg_slot="bg_elevated", **kwargs):
+        """Checkbutton with theme-driven bg, fg, selectcolor, and active
+        states. bg_slot is 'bg_elevated' (default, panel interiors) or
+        'bg' (action-row checkboxes on root bg).
+        """
+        bg = self._theme[bg_slot]
+        cb = tk.Checkbutton(
+            parent,
+            bg=bg, fg=self._theme["text"],
+            selectcolor=bg,
+            activebackground=bg, activeforeground=self._theme["text"],
+            **kwargs,
+        )
+        self._theme_widgets["checkbutton"].append((cb, bg_slot))
+        return cb
+
     # -----------------------------------------------------------------------
     # Credentials
     # -----------------------------------------------------------------------
@@ -377,22 +617,27 @@ class BatchGraderApp:
 
         env_user, env_pass = self._read_env_credentials()
 
-        Label(frame, text="Username:").grid(row=0, column=0, sticky="e", padx=(0, 4))
+        self._themed_label(frame, "Username:").grid(
+            row=0, column=0, sticky="e", padx=(0, 4)
+        )
         self._username = StringVar(value=env_user)
-        Entry(frame, textvariable=self._username, width=30).grid(
+        self._themed_entry(frame, textvariable=self._username, width=30).grid(
             row=0, column=1, padx=(0, 20)
         )
 
-        Label(frame, text="Password:").grid(row=0, column=2, sticky="e", padx=(0, 4))
-        self._password = StringVar(value=env_pass)
-        Entry(frame, textvariable=self._password, show="*", width=30).grid(
-            row=0, column=3
+        self._themed_label(frame, "Password:").grid(
+            row=0, column=2, sticky="e", padx=(0, 4)
         )
+        self._password = StringVar(value=env_pass)
+        self._themed_entry(
+            frame, textvariable=self._password, show="*", width=30,
+        ).grid(row=0, column=3)
 
-        Label(
+        self._themed_label(
             frame,
-            text="  (Tip: set TECHSMART_USERNAME / TECHSMART_PASSWORD in .env)",
-            fg=self._theme["text_muted"], font=("Arial", 9)
+            "  (Tip: set TECHSMART_USERNAME / TECHSMART_PASSWORD in .env)",
+            fg_slot="text_muted",
+            font=("Arial", 9),
         ).grid(row=0, column=4, padx=10, sticky="w")
 
     def _read_env_credentials(self) -> tuple[str, str]:
@@ -425,19 +670,20 @@ class BatchGraderApp:
         )
         outer.pack(fill="x", padx=10, pady=4)
 
-        Label(frame, text="Gradebook URL:").grid(
+        self._themed_label(frame, "Gradebook URL:").grid(
             row=0, column=0, sticky="e", padx=(0,6)
         )
         self._gradebook_url = StringVar(
             value=_load_gradebook_url(self._active_unit.get())
         )
-        Entry(frame, textvariable=self._gradebook_url, width=70).grid(
-            row=0, column=1, sticky="ew", padx=(0, 8)
-        )
-        Label(
+        self._themed_entry(
+            frame, textvariable=self._gradebook_url, width=70,
+        ).grid(row=0, column=1, sticky="ew", padx=(0, 8))
+        self._themed_label(
             frame,
-            text="e.g.  https://platform.techsmart.codes/gradebook/class/XXXXX/?unit_id=3&lesson_id=5",
-            fg=self._theme["text_muted"], font=("Arial", 9)
+            "e.g.  https://platform.techsmart.codes/gradebook/class/XXXXX/?unit_id=3&lesson_id=5",
+            fg_slot="text_muted",
+            font=("Arial", 9),
         ).grid(row=1, column=1, sticky="w", pady=(2, 0))
         frame.columnconfigure(1, weight=1)
 
@@ -481,7 +727,9 @@ class BatchGraderApp:
         counters_outer_border.pack(side="right", fill="y", padx=(8, 0))
 
         # Inner frame is what we wipe-and-rebuild on every refresh
-        self._counters_inner = Frame(self._counters_outer)
+        self._counters_inner = self._themed_frame(
+            self._counters_outer, slot="bg_elevated",
+        )
         self._counters_inner.pack(fill="both", expand=True)
 
         self._init_runs_canvas()
@@ -497,20 +745,25 @@ class BatchGraderApp:
         self._refresh_run_counters()
 
     def _init_runs_canvas(self):
-        canvas_frame = Frame(self._runs_outer)
+        canvas_frame = self._themed_frame(self._runs_outer, slot="bg_elevated")
         canvas_frame.pack(fill="both", expand=True)
 
         h_scroll = Scrollbar(canvas_frame, orient="horizontal")
         h_scroll.pack(side="bottom", fill="x")
 
+        # Canvas isn't covered by a helper (single caller; see Phase 1c.1
+        # design notes) — register it inline.
         self._runs_canvas = Canvas(
-            canvas_frame, height=160, xscrollcommand=h_scroll.set,
-            highlightthickness=0
+            canvas_frame, height=160,
+            bg=self._theme["bg_elevated"],
+            xscrollcommand=h_scroll.set,
+            highlightthickness=0,
         )
+        self._theme_widgets["bg_elevated"].append(self._runs_canvas)
         self._runs_canvas.pack(fill="both", expand=True)
         h_scroll.config(command=self._runs_canvas.xview)
 
-        self._runs_inner = Frame(self._runs_canvas)
+        self._runs_inner = self._themed_frame(self._runs_canvas, slot="bg_elevated")
         # Inset the content so run rows aren't flush with the canvas edge
         self._runs_canvas.create_window((10,6), window=self._runs_inner, anchor="nw")
         self._runs_inner.bind(
@@ -545,33 +798,56 @@ class BatchGraderApp:
         would jump above the runs section).
         """
         self._run_rows.clear()
+
+        # Drop stale registry entries before destroying anything. Every
+        # widget about to be destroyed is a descendant of self._runs_wrapper.
+        # Calling .configure() on a destroyed widget throws TclError; cleaning
+        # up explicitly here is more robust than wrapping _apply_theme in
+        # try/except (which would also silently absorb real bugs).
+        wrapper_prefix = str(self._runs_wrapper) + "."
+        for slot, widgets in self._theme_widgets.items():
+            if slot == "checkbutton":
+                # Tuples of (widget, bg_slot) — filter by the widget's path.
+                self._theme_widgets[slot] = [
+                    (w, bg_slot) for w, bg_slot in widgets
+                    if not str(w).startswith(wrapper_prefix)
+                ]
+            else:
+                self._theme_widgets[slot] = [
+                    w for w in widgets if not str(w).startswith(wrapper_prefix)
+                ]
+        self._theme_canvas_rects = [
+            (c, rid) for c, rid in self._theme_canvas_rects
+            if not str(c).startswith(wrapper_prefix)
+        ]
+
         # Clear the wrapper's children but keep the wrapper itself
         for child in self._runs_wrapper.winfo_children():
             child.destroy()
         self._populate_runs_wrapper(saved_runs)
 
     def _populate_header_row(self):
-        Label(
-            self._runs_inner, text="Run Name", width=18, anchor="w",
-            font=("Arial", 9, "bold")
+        self._themed_label(
+            self._runs_inner, "Run Name", width=18, anchor="w",
+            font=("Arial", 9, "bold"),
         ).grid(row=0, column=0, padx=2, pady=6)
 
         # Spacer cells above the per-row [☑ All] [☐ None] buttons.
         # No header text — the buttons' meaning is self-evident from the icons.
-        Label(self._runs_inner, text="", width=5).grid(row=0, column=1, padx=1)
-        Label(self._runs_inner, text="", width=6).grid(row=0, column=2, padx=1)
+        self._themed_label(self._runs_inner, "", width=5).grid(row=0, column=1, padx=1)
+        self._themed_label(self._runs_inner, "", width=6).grid(row=0, column=2, padx=1)
 
         for col_idx, (_, label) in enumerate(self._current_assignments):
-            Label(
-                self._runs_inner, text=label, width=14, anchor="center",
-                font=("Arial", 9, "bold"), wraplength=90
+            self._themed_label(
+                self._runs_inner, label, width=14, anchor="center",
+                font=("Arial", 9, "bold"), wraplength=90,
             ).grid(row=0, column=col_idx + 3, padx=4, pady=4)
 
-        Label(
-            self._runs_inner, text="", width=3
+        self._themed_label(
+            self._runs_inner, "", width=3,
         ).grid(row=0, column=len(self._current_assignments) + 3)
 
-        btn_frame = Frame(self._runs_outer)
+        btn_frame = self._themed_frame(self._runs_outer, slot="bg_elevated")
         btn_frame.pack(fill="x", pady=(4, 0))
         add_btn = tk.Label(
             btn_frame, text="+ Add Run",
@@ -581,10 +857,15 @@ class BatchGraderApp:
         )
         add_btn.pack(side="left")
         add_btn.bind("<Button-1>", lambda e: self._add_run_row())
-        # Hover effect — slight darken/lighten on enter
-        _add_normal_bg = self._theme["button_neutral_bg"]
-        add_btn.bind("<Enter>", lambda e: add_btn.config(bg="#cccccc" if self._theme_name == "Light Modern" else "#4a4a4a"))
-        add_btn.bind("<Leave>", lambda e: add_btn.config(bg=_add_normal_bg))
+        # Hover effect — read normal bg from self._theme at Leave time so
+        # it self-corrects after theme switch (instead of captured-at-creation).
+        add_btn.bind("<Enter>", lambda e: add_btn.config(
+            bg="#cccccc" if self._theme_name == "Light Modern" else "#4a4a4a"
+        ))
+        add_btn.bind("<Leave>", lambda e: add_btn.config(
+            bg=self._theme["button_neutral_bg"]
+        ))
+        self._theme_widgets["button_neutral"].append(add_btn)
 
     def _add_run_row(self, name: str = "Run", pre_checked: set[str] | None = None):
         row_idx = len(self._run_rows) + 1
@@ -595,8 +876,8 @@ class BatchGraderApp:
         # updates live so they see "Run A: 5 of 14" become "Warmups: 5 of 14"
         # as they type.
         name_var.trace_add("write", lambda *_: self._refresh_run_counters())
-        Entry(
-            self._runs_inner, textvariable=name_var, width=18
+        self._themed_entry(
+            self._runs_inner, textvariable=name_var, width=18,
         ).grid(row=row_idx, column=0, padx=4, pady=2)
         row_record["name_var"] = name_var
 
@@ -613,12 +894,15 @@ class BatchGraderApp:
         all_btn.grid(row=row_idx, column=1, padx=(2, 1))
         all_btn.bind("<Button-1>", lambda e, rr=row_record: self._select_all_in_run(rr))
 
-        # Hover effect — slight darken for visual feedback
-        _all_normal = self._theme["button_action_bg"]
+        # Hover effect — Leave reads normal bg from self._theme so it
+        # self-corrects after theme switch.
         all_btn.bind("<Enter>", lambda e: all_btn.config(
             bg="#bfdbfe" if self._theme_name == "Light Modern" else "#2a4a7a"
         ))
-        all_btn.bind("<Leave>", lambda e: all_btn.config(bg=_all_normal))
+        all_btn.bind("<Leave>", lambda e: all_btn.config(
+            bg=self._theme["button_action_bg"]
+        ))
+        self._theme_widgets["button_action"].append(all_btn)
 
         none_btn = tk.Label(
             self._runs_inner, text="☐ None",
@@ -629,33 +913,73 @@ class BatchGraderApp:
         none_btn.grid(row=row_idx, column=2, padx=(1, 2))
         none_btn.bind("<Button-1>", lambda e, rr=row_record: self._select_none_in_run(rr))
 
-        _none_normal = self._theme["button_dim_bg"]
         none_btn.bind("<Enter>", lambda e: none_btn.config(
             bg="#6b7280" if self._theme_name == "Light Modern" else "#5a5a5c"
         ))
-        none_btn.bind("<Leave>", lambda e: none_btn.config(bg=_none_normal))
+        none_btn.bind("<Leave>", lambda e: none_btn.config(
+            bg=self._theme["button_dim_bg"]
+        ))
+        self._theme_widgets["button_dim"].append(none_btn)
 
         for col_idx, (aid, _) in enumerate(self._current_assignments):
             bv = BooleanVar(value=(pre_checked is not None and aid in pre_checked))
             # Trace fires when a checkbox is clicked OR when [All]/[None]
             # programmatically calls bv.set(...) — both paths trigger refresh.
             bv.trace_add("write", lambda *_: self._refresh_run_counters())
-            cb = tk.Checkbutton(self._runs_inner, variable=bv)
+            cb = self._themed_checkbutton(self._runs_inner, variable=bv)
             cb.grid(row=row_idx, column=col_idx + 3, padx=2)
             row_record["check_vars"][aid] = bv
 
         def _delete(rr=row_record, ri=row_idx):
+            # Collect widget paths BEFORE destruction so we can filter them
+            # out of the theme registries. Same reasoning as the
+            # _rebuild_runs_section cleanup, just scoped to one row: without
+            # this, destroyed widgets stay registered and TclError fires on
+            # the next theme switch — and worse, the error aborts the rest
+            # of _apply_theme so widgets registered AFTER the dead one in
+            # later slots (buttons, checkbuttons) silently don't update.
+            doomed_paths = {str(w) for w in self._runs_inner.grid_slaves(row=ri)}
+            for slot, widgets in self._theme_widgets.items():
+                if slot == "checkbutton":
+                    self._theme_widgets[slot] = [
+                        (w, bg_slot) for w, bg_slot in widgets
+                        if str(w) not in doomed_paths
+                    ]
+                else:
+                    self._theme_widgets[slot] = [
+                        w for w in widgets if str(w) not in doomed_paths
+                    ]
             for widget in self._runs_inner.grid_slaves(row=ri):
                 widget.destroy()
             if rr in self._run_rows:
                 self._run_rows.remove(rr)
             self._refresh_run_counters()
 
-        del_btn = tk.Button(
-            self._runs_inner, text="✕", fg="red", relief="flat",
-            command=_delete, font=("Arial", 9), padx=2
+        # tk.Label-styled-button (not tk.Button) — same pattern as every
+        # other button in this app. tk.Button on macOS Aqua ignores our bg
+        # config and renders with native system colors, which leaves a
+        # dark patch in Light Modern (and a subtly-off patch in Dark Modern).
+        # fg="red" stays as a semantic constant (delete = red, unchanged
+        # across themes), but bg is theme-driven.
+        del_btn = tk.Label(
+            self._runs_inner, text="✕", fg="red",
+            bg=self._theme["bg_elevated"],
+            relief="raised", borderwidth=1,
+            font=("Arial", 9), padx=6, pady=2,
+            cursor="hand2",
         )
         del_btn.grid(row=row_idx, column=len(self._current_assignments) + 3, padx=(2,10))
+        del_btn.bind("<Button-1>", lambda e: _delete())
+        # Subtle hover — slight darken on Light Modern, slight lighten on
+        # Dark Modern. Leave reads from self._theme so it self-corrects
+        # after theme switch.
+        del_btn.bind("<Enter>", lambda e: del_btn.config(
+            bg="#dddddd" if self._theme_name == "Light Modern" else "#3a3a3a"
+        ))
+        del_btn.bind("<Leave>", lambda e: del_btn.config(
+            bg=self._theme["bg_elevated"]
+        ))
+        self._theme_widgets["bg_elevated"].append(del_btn)
         row_record["del_btn"] = del_btn
         self._run_rows.append(row_record)
 
@@ -684,9 +1008,12 @@ class BatchGraderApp:
     def _refresh_run_counters(self):
         """Wipe and rebuild the right-hand 'Selected' sidebar.
 
-        Called whenever a checkbox flips, a run name changes, or a run is
-        added or deleted. Cheap at this scale (≤ 10 runs typical), so we
-        rebuild rather than track individual labels.
+        Called whenever a checkbox flips, a run name changes, a run is
+        added or deleted, OR the theme changes (via _apply_theme). Cheap
+        at this scale (≤ 10 runs typical), so we rebuild rather than track
+        individual labels. Labels here are NOT registered in _theme_widgets
+        — they're recreated frequently, so we just read current theme
+        colors directly at create-time.
         """
         # Defensive: during unit-switch teardown the inner frame is destroyed
         # and recreated. If a stray trace fires in between, bail out cleanly.
@@ -704,11 +1031,13 @@ class BatchGraderApp:
             w.destroy()
 
         total = len(self._current_assignments)
+        t = self._theme  # alias
 
         if not self._run_rows:
             Label(
                 inner, text="(no runs)", anchor="w",
-                font=("Arial", 9, "italic"), fg="gray"
+                font=("Arial", 9, "italic"),
+                bg=t["bg_elevated"], fg="gray",
             ).pack(anchor="w", padx=8, pady=2)
             return
 
@@ -718,7 +1047,8 @@ class BatchGraderApp:
             Label(
                 inner,
                 text=f"{name}: {checked} of {total}",
-                anchor="w", font=("Arial", 10)
+                anchor="w", font=("Arial", 10),
+                bg=t["bg_elevated"], fg=t["text"],
             ).pack(anchor="w", padx=8, pady=2)
 
     # -----------------------------------------------------------------------
@@ -727,7 +1057,7 @@ class BatchGraderApp:
 
     def _build_action_row(self, parent):
         # ── Row 1: Grade button + Stop button + output folder ────────────────
-        row1 = Frame(parent, pady=4)
+        row1 = self._themed_frame(parent, slot="bg", pady=4)
         row1.pack(fill="x", padx=10)
 
         self._grade_btn = tk.Label(
@@ -757,10 +1087,10 @@ class BatchGraderApp:
         self._stop_btn.bind("<Leave>",
                             lambda e: self._stop_btn.config(bg="#b91c1c"))
 
-        Label(row1, text="  Output folder:").pack(side="left")
-        Entry(row1, textvariable=self._output_dir, width=45).pack(
-            side="left", padx=4
-        )
+        self._themed_label(row1, "  Output folder:", bg_slot="bg").pack(side="left")
+        self._themed_entry(
+            row1, textvariable=self._output_dir, width=45,
+        ).pack(side="left", padx=4)
         browse_btn = tk.Label(
             row1, text="Browse…",
             relief="flat",
@@ -769,33 +1099,38 @@ class BatchGraderApp:
         )
         browse_btn.pack(side="left")
         browse_btn.bind("<Button-1>", lambda e: self._browse_output())
-        # Hover effect
-        _browse_normal = self._theme["button_neutral_bg"]
+        # Hover effect — Leave reads from self._theme so it self-corrects
+        # after theme switch (was capturing _browse_normal at creation).
         browse_btn.bind("<Enter>", lambda e: browse_btn.config(
             bg="#cccccc" if self._theme_name == "Light Modern" else "#4a4a4a"
         ))
-        browse_btn.bind("<Leave>", lambda e: browse_btn.config(bg=_browse_normal))
+        browse_btn.bind("<Leave>", lambda e: browse_btn.config(
+            bg=self._theme["button_neutral_bg"]
+        ))
+        # Register browse_btn for theme switching (mechanical — the hover
+        # lambdas already reference self._theme_name so they self-update).
+        self._theme_widgets["button_neutral"].append(browse_btn)
 
         # ── Row 2: Options checkboxes ─────────────────────────────────────────
-        row2 = Frame(parent, pady=2)
+        row2 = self._themed_frame(parent, slot="bg", pady=2)
         row2.pack(fill="x", padx=10)
 
         self._headless_var = BooleanVar(value=False)
-        tk.Checkbutton(
+        self._themed_checkbutton(
             row2, text="Run browser headless (hidden)",
-            variable=self._headless_var
+            variable=self._headless_var, bg_slot="bg",
         ).pack(side="left", padx=(0, 20))
 
         self._refresh_context_var = BooleanVar(value=False)
-        tk.Checkbutton(
+        self._themed_checkbutton(
             row2, text="Refresh assignment context cache",
-            variable=self._refresh_context_var
+            variable=self._refresh_context_var, bg_slot="bg",
         ).pack(side="left", padx=(0, 20))
 
         self._anonymize_var = BooleanVar(value=False)
-        tk.Checkbutton(
+        self._themed_checkbutton(
             row2, text="Anonymize student names in reports",
-            variable=self._anonymize_var
+            variable=self._anonymize_var, bg_slot="bg",
         ).pack(side="left")
 
     def _browse_output(self):
