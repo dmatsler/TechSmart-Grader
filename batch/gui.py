@@ -163,6 +163,40 @@ THEMES: dict[str, dict[str, str]] = {
         "button_dim_bg":     "#48484a",
         "button_dim_fg":     "#d4d4d4",
     },
+    "Light High Contrast": {
+        # Off-white base; deep purple anchors the text and action affordances.
+        "bg":                "#F9FAFB",  # off-white root
+        "bg_elevated":       "#ffffff",  # pure white panels
+        "text":              "#2A0A4A",  # deep purple text — 18:1 on white, AAA
+        "text_muted":        "#553e6e",  # muted purple — 9:1 on white, AAA
+        "entry_bg":          "#ffffff",
+        "entry_text":        "#2A0A4A",
+        "border":            "#7C3AED",  # vibrant violet — panels framed in violet
+        "button_neutral_bg": "#7C3AED",  # violet utility (Browse, +Add Run)
+        "button_neutral_fg": "#F9FAFB",  # ~5.4:1, AA (visible accent, expected for buttons)
+        "button_action_bg":  "#B4FF39",  # lime ☑All — vibrant affirm
+        "button_action_fg":  "#2A0A4A",  # deep purple on lime — 14:1, AAA
+        "button_dim_bg":     "#4a3760",  # muted purple ☐None — same family, lower energy
+        "button_dim_fg":     "#F9FAFB",  # ~13:1, AAA
+    },
+    "Dark High Contrast": {
+        # Near-black root with deep purple panels — the panels lift via
+        # color, not shade. Violet primary accent + lime action affirm.
+        # Text contrast AAA, colored buttons AA (vibrancy trade).
+        "bg":                "#111827",  # near-black with cool blue tint
+        "bg_elevated":       "#2A0A4A",  # deep purple panels
+        "text":              "#F9FAFB",  # off-white text — 17:1 on purple, AAA
+        "text_muted":        "#a8a0d0",  # lavender — 7.5:1 on purple, AAA
+        "entry_bg":          "#111827",
+        "entry_text":        "#F9FAFB",
+        "border":            "#7C3AED",  # vibrant violet borders
+        "button_neutral_bg": "#7C3AED",  # violet utility
+        "button_neutral_fg": "#F9FAFB",  # ~5.4:1, AA
+        "button_action_bg":  "#B4FF39",  # bright lime ☑All — vibrant affirm
+        "button_action_fg":  "#2A0A4A",  # deep purple on lime — 14:1, AAA
+        "button_dim_bg":     "#4c1d95",  # muted violet dim — same family, lower energy
+        "button_dim_fg":     "#F9FAFB",  # ~13:1, AAA
+    },
 }
 
 # Constant across all themes (see note above)
