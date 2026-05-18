@@ -14,7 +14,7 @@ context_cache_*.json
 # User-specific state — class IDs, saved run configs, active unit
 gradebook_url*.json
 saved_runs*.json
-active_unit.json
+active_*.json
 
 # Grading reports — student names + grades (FERPA)
 # Default output is ~/Desktop/techsmart_grades but in case you ever

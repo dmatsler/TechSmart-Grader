@@ -39,9 +39,10 @@ from batch.report import write_csv, write_html, write_detail_csv
 # Persistence helpers
 # ---------------------------------------------------------------------------
 
-_SAVE_DIR        = _ROOT
+_SAVE_DIR         = _ROOT
 _ACTIVE_UNIT_FILE = _SAVE_DIR / "active_unit.json"
-_DEFAULT_OUTPUT  = Path.home() / "Desktop" / "techsmart_grades"
+_ACTIVE_THEME_FILE = _SAVE_DIR / "active_theme.json"
+_DEFAULT_OUTPUT   = Path.home() / "Desktop" / "techsmart_grades"
 
 
 def _load_active_unit() -> str:
@@ -55,6 +56,30 @@ def _load_active_unit() -> str:
 
 def _save_active_unit(slug: str) -> None:
     _ACTIVE_UNIT_FILE.write_text(json.dumps({"unit": slug}, indent=2))
+
+
+def _load_active_theme() -> str:
+    """Return the saved theme name, or 'Dark Modern' if nothing's saved
+    or the saved name isn't a known theme. Handles four failure modes
+    silently:
+      - file doesn't exist (first launch)
+      - JSON malformed (manually edited, corrupted)
+      - "theme" key missing from JSON
+      - theme name no longer exists in THEMES (renamed/removed)
+    All four fall back to the default rather than crash the launch.
+    """
+    if _ACTIVE_THEME_FILE.exists():
+        try:
+            name = json.loads(_ACTIVE_THEME_FILE.read_text()).get("theme", "")
+            if name in THEMES:
+                return name
+        except Exception:
+            pass
+    return "Dark Modern"
+
+
+def _save_active_theme(name: str) -> None:
+    _ACTIVE_THEME_FILE.write_text(json.dumps({"theme": name}, indent=2))
 
 
 def _gradebook_file(unit_slug: str) -> Path:
@@ -162,7 +187,7 @@ class BatchGraderApp:
 
         # Theme — defaults to Dark Modern (matches current GUI look).
         # Persistence (loading saved choice on startup) added in a later commit.
-        self._theme_name = "Dark Modern"
+        self._theme_name = _load_active_theme()
         self._theme = THEMES[self._theme_name]
         # Registry for tracked-widget restyling. _apply_theme() iterates these
         # lists. Populated as widgets are built; Commit 2 adds the actual
@@ -435,6 +460,7 @@ class BatchGraderApp:
         if new_name == self._theme_name:
             return
         self._apply_theme(new_name)
+        _save_active_theme(new_name)
         self._log_msg(f"[theme] switched to: {new_name}")
         # Clear the highlighted-text state so the combo doesn't sit visually
         # "still selected" after the choice is made.
