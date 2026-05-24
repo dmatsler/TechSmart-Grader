@@ -441,7 +441,7 @@ class BatchGraderApp:
             frame,
             "  (changing unit reloads assignment columns and gradebook URL)",
             fg_slot="text_muted",
-            font=("Arial", 9),
+            font=("Helvetica", 9),
         ).grid(row=0, column=2, sticky="w", padx=8)
 
         # ── Right: Theme panel (combobox added in Piece B) ──────────────────
@@ -697,7 +697,7 @@ class BatchGraderApp:
             frame,
             "  (Tip: set TECHSMART_USERNAME / TECHSMART_PASSWORD in .env)",
             fg_slot="text_muted",
-            font=("Arial", 9),
+            font=("Helvetica", 9),
         ).grid(row=0, column=4, padx=10, sticky="w")
 
     def _read_env_credentials(self) -> tuple[str, str]:
@@ -743,7 +743,7 @@ class BatchGraderApp:
             frame,
             "e.g.  https://platform.techsmart.codes/gradebook/class/XXXXX/?unit_id=3&lesson_id=5",
             fg_slot="text_muted",
-            font=("Arial", 9),
+            font=("Helvetica", 9),
         ).grid(row=1, column=1, sticky="w", pady=(2, 0))
         frame.columnconfigure(1, weight=1)
 
@@ -889,7 +889,7 @@ class BatchGraderApp:
     def _populate_header_row(self):
         self._themed_label(
             self._runs_inner, "Run Name", width=18, anchor="w",
-            font=("Arial", 9, "bold"),
+            font=("Helvetica", 9, "bold"),
         ).grid(row=0, column=0, padx=2, pady=6)
 
         # Spacer cells above the per-row [☑ All] [☐ None] buttons.
@@ -900,7 +900,7 @@ class BatchGraderApp:
         for col_idx, (_, label) in enumerate(self._current_assignments):
             self._themed_label(
                 self._runs_inner, label, width=14, anchor="center",
-                font=("Arial", 9, "bold"), wraplength=90,
+                font=("Helvetica", 9, "bold"), wraplength=90,
             ).grid(row=0, column=col_idx + 3, padx=4, pady=4)
 
         self._themed_label(
@@ -949,7 +949,7 @@ class BatchGraderApp:
             self._runs_inner, text="☑ All",
             relief="raised",
             bg=self._theme["button_action_bg"], fg=self._theme["button_action_fg"],
-            font=("Arial", 8), padx=4, pady=1, cursor="hand2"
+            font=("Helvetica", 8), padx=4, pady=1, cursor="hand2"
         )
         all_btn.grid(row=row_idx, column=1, padx=(2, 1))
         all_btn.bind("<Button-1>", lambda e, rr=row_record: self._select_all_in_run(rr))
@@ -968,7 +968,7 @@ class BatchGraderApp:
             self._runs_inner, text="☐ None",
             relief="raised",
             bg=self._theme["button_dim_bg"], fg=self._theme["button_dim_fg"],
-            font=("Arial", 8), padx=4, pady=1, cursor="hand2"
+            font=("Helvetica", 8), padx=4, pady=1, cursor="hand2"
         )
         none_btn.grid(row=row_idx, column=2, padx=(1, 2))
         none_btn.bind("<Button-1>", lambda e, rr=row_record: self._select_none_in_run(rr))
@@ -1025,7 +1025,7 @@ class BatchGraderApp:
             self._runs_inner, text="✕", fg="red",
             bg=self._theme["bg_elevated"],
             relief="raised", borderwidth=1,
-            font=("Arial", 9), padx=6, pady=2,
+            font=("Helvetica", 9), padx=6, pady=2,
             cursor="hand2",
         )
         del_btn.grid(row=row_idx, column=len(self._current_assignments) + 3, padx=(2,10))
@@ -1096,7 +1096,7 @@ class BatchGraderApp:
         if not self._run_rows:
             Label(
                 inner, text="(no runs)", anchor="w",
-                font=("Arial", 9, "italic"),
+                font=("Helvetica", 9, "italic"),
                 bg=t["bg_elevated"], fg="gray",
             ).pack(anchor="w", padx=8, pady=2)
             return
@@ -1107,7 +1107,7 @@ class BatchGraderApp:
             Label(
                 inner,
                 text=f"{name}: {checked} of {total}",
-                anchor="w", font=("Arial", 10),
+                anchor="w", font=("Helvetica", 10),
                 bg=t["bg_elevated"], fg=t["text"],
             ).pack(anchor="w", padx=8, pady=2)
 
@@ -1122,7 +1122,7 @@ class BatchGraderApp:
 
         self._grade_btn = tk.Label(
             row1, text="▶  Grade All Runs",
-            bg="#1a7a1a", fg="white", font=("Arial", 13, "bold"),
+            bg="#1a7a1a", fg="white", font=("Helvetica", 13, "bold"),
             relief="raised", padx=20, pady=10,
             cursor="hand2"
         )
@@ -1136,7 +1136,7 @@ class BatchGraderApp:
         # Stop button — hidden when not grading
         self._stop_btn = tk.Label(
             row1, text="■  Stop Grading",
-            bg="#b91c1c", fg="white", font=("Arial", 13, "bold"),
+            bg="#b91c1c", fg="white", font=("Helvetica", 13, "bold"),
             relief="raised", padx=16, pady=10,
             cursor="hand2"
         )
@@ -1401,61 +1401,112 @@ class BatchGraderApp:
     # -----------------------------------------------------------------------
     # Flagged submission review dialog
     # -----------------------------------------------------------------------
+    #
+    # This dialog shows every flagged submission and lets the teacher confirm
+    # or override the grader's rubric score before reports are written. Key
+    # design decisions (and why):
+    #
+    #   - Named Font objects (tkfont.Font) instead of font tuples, so zoom
+    #     keybindings can update every widget at once via .configure(size=N).
+    #   - grid for the top-level layout with row/column weights, so the table
+    #     area absorbs all vertical resize and the inner columns expand
+    #     proportionally as the dialog grows.
+    #   - `canvas.itemconfig(canvas_window, width=event.width)` makes the
+    #     inner Frame width track the canvas viewport. Without this, the
+    #     Frame stays at its natural width forever and columns can't expand.
+    #   - Text widget (not Label) for the Flag Reasons cell, so wrapping is
+    #     native, the cell respects its grid width, and the user can select
+    #     and copy text out.
+    #
+    # -----------------------------------------------------------------------
 
     def _open_review_dialog(
         self, flagged, all_students, runs, unit_slug,
         output_dir, timestamp, done_event
     ):
+        import tkinter.font as tkfont
+
         points_map: dict[int, int] = {0: 0, 1: 50, 2: 75, 3: 100}
 
+        # Persist font size across reopens within the session — Ctrl+= bumps it
+        if not hasattr(self, "_review_font_size"):
+            self._review_font_size = 11   # baseline; was effectively 8–9
+
+        base = self._review_font_size
+        fonts = {
+            "title":    tkfont.Font(family="Helvetica", size=base + 3, weight="bold"),
+            "subtitle": tkfont.Font(family="Helvetica", size=base),
+            "header":   tkfont.Font(family="Helvetica", size=base + 1, weight="bold"),
+            "cell":     tkfont.Font(family="Helvetica", size=base),
+            "reasons":  tkfont.Font(family="Helvetica", size=base),
+            "button":   tkfont.Font(family="Helvetica", size=base + 1, weight="bold"),
+        }
+
         dialog = Toplevel(self.root)
-        dialog.title(f"⚠ Review {len(flagged)} Flagged Submission(s) Before Writing Reports")
-        dialog.geometry("1050x640")
-        dialog.configure(bg="white")   # force white — overrides macOS dark mode
-        dialog.grab_set()   # modal — must dismiss before main window responds
+        dialog.title(
+            f"⚠ Review {len(flagged)} Flagged Submission(s) Before Writing Reports"
+        )
+        dialog.geometry("1250x720")
+        dialog.minsize(900, 500)
+        dialog.configure(bg="white")
+        dialog.grab_set()    # modal
+
+        # Top-level grid: header, table (stretches), footer
+        dialog.rowconfigure(0, weight=0)
+        dialog.rowconfigure(1, weight=1)   # table area absorbs vertical resize
+        dialog.rowconfigure(2, weight=0)
+        dialog.columnconfigure(0, weight=1)
 
         # ── Header ──────────────────────────────────────────────────────────
         header_frame = Frame(dialog, bg="#fffbeb", pady=10)
-        header_frame.pack(fill="x", padx=12, pady=(10, 4))
+        header_frame.grid(row=0, column=0, sticky="ew", padx=12, pady=(10, 4))
         Label(
             header_frame,
             text=f"⚠  {len(flagged)} submission(s) were flagged for integrity review.",
-            bg="#fffbeb", font=("Arial", 12, "bold"), fg="#92400e"
+            bg="#fffbeb", font=fonts["title"], fg="#92400e",
         ).pack(anchor="w", padx=10)
         Label(
             header_frame,
-            text="Review each one below. Set the correct score using the dropdown, "
-                 "then click 'Write Reports' when done.\n"
-                 "Submissions you don't change will keep the grader's computed score.",
-            bg="#fffbeb", font=("Arial", 10), fg="#78350f", justify="left"
+            text=("Review each one below. Set the correct score using the dropdown, "
+                  "then click 'Write Reports' when done.\n"
+                  "Submissions you don't change will keep the grader's computed score.\n"
+                  "Zoom: Ctrl+= to enlarge, Ctrl+- to shrink, Ctrl+0 to reset."),
+            bg="#fffbeb", font=fonts["subtitle"], fg="#78350f", justify="left",
         ).pack(anchor="w", padx=10, pady=(4, 0))
 
-        # ── Scrollable table ─────────────────────────────────────────────────
+        # ── Scrollable table area ───────────────────────────────────────────
         table_frame = Frame(dialog, bg="white")
-        table_frame.pack(fill="both", expand=True, padx=12, pady=8)
+        table_frame.grid(row=1, column=0, sticky="nsew", padx=12, pady=8)
+        table_frame.rowconfigure(0, weight=1)
+        table_frame.columnconfigure(0, weight=1)
 
         canvas = Canvas(table_frame, bg="white", highlightthickness=0)
         scrollbar = Scrollbar(table_frame, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        canvas.grid(row=0, column=0, sticky="nsew")
 
         inner = Frame(canvas, bg="white")
-        canvas.create_window((0, 0), window=inner, anchor="nw")
+        canvas_window = canvas.create_window((0, 0), window=inner, anchor="nw")
+
+        # Make the inner frame width track the canvas viewport — without this,
+        # the frame stays at its natural creation width and columns can't grow.
+        def _on_canvas_configure(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+        canvas.bind("<Configure>", _on_canvas_configure)
         inner.bind(
             "<Configure>",
             lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
 
-        # ── Vertical trackpad/mousewheel scrolling ──────────────────────────
+        # ── Mousewheel / trackpad scrolling ─────────────────────────────────
         def _on_scroll(event):
             delta = 0
             if event.num == 4:
-                delta = -1           # Linux scroll up
+                delta = -1
             elif event.num == 5:
-                delta = 1            # Linux scroll down
+                delta = 1
             elif hasattr(event, "delta"):
-                # macOS: delta is typically ±1/±2 per tick; Windows: ±120
                 if abs(event.delta) >= 120:
                     delta = -int(event.delta / 120)
                 else:
@@ -1463,58 +1514,86 @@ class BatchGraderApp:
             if delta != 0:
                 canvas.yview_scroll(delta, "units")
 
-        # Bind to both canvas and inner frame so the event fires anywhere
-        # the mouse pointer might be over the table
         for widget in (canvas, inner, dialog):
             widget.bind("<MouseWheel>", _on_scroll)
             widget.bind("<Shift-MouseWheel>", _on_scroll)
             widget.bind("<Button-4>", _on_scroll)
             widget.bind("<Button-5>", _on_scroll)
 
-        # Column headers
-        col_widths = [18, 22, 12, 10, 45, 14]
-        headers = ["Student", "Assignment", "TS Status",
-                   "Score", "Flag Reason(s)", "Override Score"]
-        for c, (h, w) in enumerate(zip(headers, col_widths)):
+        # ── Column weights — Flag Reasons gets most of the stretch ──────────
+        # (0:student 1:assignment 2:status 3:score 4:reasons 5:override)
+        inner.columnconfigure(0, weight=2, minsize=120)
+        inner.columnconfigure(1, weight=2, minsize=150)
+        inner.columnconfigure(2, weight=1, minsize=90)
+        inner.columnconfigure(3, weight=1, minsize=90)
+        inner.columnconfigure(4, weight=5, minsize=300)
+        inner.columnconfigure(5, weight=2, minsize=150)
+
+        # ── Column headers ──────────────────────────────────────────────────
+        headers = [
+            "Student", "Assignment", "TS Status",
+            "Score", "Flag Reason(s)", "Override Score",
+        ]
+        for c, h in enumerate(headers):
             tk.Label(
-                inner, text=h, width=w, anchor="w",
-                font=("Arial", 9, "bold"),
-                relief="ridge", bg="#1d4ed8", fg="white", padx=4
+                inner, text=h, anchor="w",
+                font=fonts["header"], relief="ridge",
+                bg="#1d4ed8", fg="white", padx=8, pady=6,
             ).grid(row=0, column=c, padx=1, pady=1, sticky="nsew")
 
-        # Override vars — one IntVar per flagged submission
-        override_vars: list[tuple] = []  # (student_result, ar, IntVar)
+        # ── Per-row content ─────────────────────────────────────────────────
+        override_vars: list[tuple] = []   # (student_result, ar, IntVar, combo)
 
         for row_num, (student_name, student_result, ar) in enumerate(flagged, start=1):
-            bg_color = "#ffffff"  # force white — avoids system dark mode bleed
+            bg_color = "#ffffff"    # force white — avoids system dark-mode bleed
 
-            tk.Label(inner, text=student_name, width=18, anchor="w",
-                  bg=bg_color, fg="#1f2937", relief="groove",
-                  font=("Arial", 9), padx=4
-                  ).grid(row=row_num, column=0, padx=1, pady=1, sticky="nsew")
+            tk.Label(
+                inner, text=student_name, anchor="w",
+                bg=bg_color, fg="#1f2937", relief="groove",
+                font=fonts["cell"], padx=6, pady=4,
+            ).grid(row=row_num, column=0, padx=1, pady=1, sticky="nsew")
 
-            tk.Label(inner, text=ar.assignment_title, width=24, anchor="w",
-                  bg=bg_color, fg="#1f2937", relief="groove",
-                  font=("Arial", 9), padx=4, wraplength=170
-                  ).grid(row=row_num, column=1, padx=1, pady=1, sticky="nsew")
+            tk.Label(
+                inner, text=ar.assignment_title, anchor="w",
+                bg=bg_color, fg="#1f2937", relief="groove",
+                font=fonts["cell"], padx=6, pady=4,
+                wraplength=200, justify="left",
+            ).grid(row=row_num, column=1, padx=1, pady=1, sticky="nsew")
 
-            tk.Label(inner, text=ar.ts_status, width=12, anchor="center",
-                  bg=bg_color, fg="#1f2937", relief="groove", font=("Arial", 9)
-                  ).grid(row=row_num, column=2, padx=1, pady=1, sticky="nsew")
+            tk.Label(
+                inner, text=ar.ts_status, anchor="center",
+                bg=bg_color, fg="#1f2937", relief="groove",
+                font=fonts["cell"], padx=6, pady=4,
+            ).grid(row=row_num, column=2, padx=1, pady=1, sticky="nsew")
 
-            tk.Label(inner, text=f"{ar.rubric_score}/3  ({ar.points}pt)",
-                  width=12, anchor="center",
-                  bg=bg_color, fg="#1f2937", relief="groove", font=("Arial", 9)
-                  ).grid(row=row_num, column=3, padx=1, pady=1, sticky="nsew")
+            tk.Label(
+                inner, text=f"{ar.rubric_score}/3  ({ar.points}pt)", anchor="center",
+                bg=bg_color, fg="#1f2937", relief="groove",
+                font=fonts["cell"], padx=6, pady=4,
+            ).grid(row=row_num, column=3, padx=1, pady=1, sticky="nsew")
 
-            reasons_text = (
-                "\n".join(f"• {r[:90]}" for r in ar.flag_reasons)
-                if ar.flag_reasons else "(no reason recorded — possible API error)"
+            # Flag reasons cell — Text widget for native word-wrap and resize
+            reasons = ar.flag_reasons or []
+            if reasons:
+                reasons_str = "\n".join(f"• {r}" for r in reasons)
+            else:
+                reasons_str = "(no reason recorded — possible API error)"
+
+            # Height heuristic: 2 lines per reason as buffer (long reasons may
+            # wrap to multiple lines), clamped between 2 and 8. The widget
+            # respects the actual wrapped line count when rendered; this just
+            # reserves vertical space so the row is tall enough.
+            line_count = min(8, max(2, len(reasons) * 2)) if reasons else 2
+
+            reasons_widget = Text(
+                inner, wrap="word", height=line_count,
+                bg=bg_color, fg="#92400e", relief="groove",
+                font=fonts["reasons"], padx=6, pady=4,
+                borderwidth=1, highlightthickness=0,
             )
-            tk.Label(inner, text=reasons_text, width=48, anchor="w",
-                  bg=bg_color, fg="#92400e", relief="groove",
-                  font=("Arial", 8), justify="left", wraplength=340, padx=4
-                  ).grid(row=row_num, column=4, padx=1, pady=1, sticky="nsew")
+            reasons_widget.insert("1.0", reasons_str)
+            reasons_widget.config(state="disabled")   # read-only, still selectable
+            reasons_widget.grid(row=row_num, column=4, padx=1, pady=1, sticky="nsew")
 
             # Score override dropdown
             override_var = IntVar(value=ar.rubric_score)
@@ -1523,29 +1602,26 @@ class BatchGraderApp:
                 for score, pts in sorted(points_map.items())
             ]
             combo = ttk.Combobox(
-                inner, values=score_options,
-                width=16, state="readonly"
+                inner, values=score_options, state="readonly",
+                font=fonts["cell"],
             )
-            combo.current(ar.rubric_score)   # pre-select computed score
-            combo.grid(row=row_num, column=5, padx=4, pady=2)
+            combo.current(ar.rubric_score)
+            combo.grid(row=row_num, column=5, padx=4, pady=4, sticky="nsew")
 
             override_vars.append((student_result, ar, override_var, combo))
 
-        # ── Footer buttons ───────────────────────────────────────────────────
+        # ── Footer buttons ──────────────────────────────────────────────────
         footer = Frame(dialog, pady=8, bg="white")
-        footer.pack(fill="x", padx=12)
+        footer.grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 12))
 
         def _on_write():
-            # Apply overrides
             for student_result, ar, _, combo in override_vars:
                 selected_idx = combo.current()
                 new_score = sorted(points_map.keys())[selected_idx]
                 ar.rubric_score = new_score
                 ar.points = points_map[new_score]
-                ar.pending = False   # confirmed
-
+                ar.pending = False    # confirmed
             dialog.destroy()
-            # Write reports from the main thread after dialog closes
             self.root.after(
                 0,
                 lambda: self._write_reports(
@@ -1569,32 +1645,52 @@ class BatchGraderApp:
         # tk.Label-as-button pattern: native tk.Button on macOS ignores bg/fg
         # because the OS draws system Aqua buttons. Using Label with raised
         # relief + manual click binding gives us full color control.
-
         confirm_btn = tk.Label(
             footer,
             text="✔  Confirm All & Write Reports",
-            bg="#16a34a", fg="white", font=("Arial", 11, "bold"),
+            bg="#16a34a", fg="white", font=fonts["button"],
             relief="raised", padx=20, pady=12, cursor="hand2",
-            width=30, height=2
+            width=30, height=2,
         )
         confirm_btn.pack(side="left", padx=(0, 12))
         confirm_btn.bind("<Button-1>", lambda e: _on_write())
-        # Hover darkens slightly — same pattern as the main Grade button
         confirm_btn.bind("<Enter>", lambda e: confirm_btn.config(bg="#15803d"))
         confirm_btn.bind("<Leave>", lambda e: confirm_btn.config(bg="#16a34a"))
 
         cancel_btn = tk.Label(
             footer,
             text="Skip Review — Write Reports Now\n(pending stay excluded from grades)",
-            bg="#64748b", fg="white", font=("Arial", 11, "bold"),
+            bg="#64748b", fg="white", font=fonts["button"],
             relief="raised", padx=20, pady=12, cursor="hand2",
-            width=30, height=2
+            width=30, height=2,
         )
         cancel_btn.pack(side="left")
         cancel_btn.bind("<Button-1>", lambda e: _on_cancel())
         cancel_btn.bind("<Enter>", lambda e: cancel_btn.config(bg="#475569"))
         cancel_btn.bind("<Leave>", lambda e: cancel_btn.config(bg="#64748b"))
 
+        # ── Zoom keybindings: Ctrl+= / Ctrl+- / Ctrl+0 ───────────────────────
+        # Updating a Font object's size cascades to every widget that uses it,
+        # so we just reconfigure each named font in place. No widget rebuild.
+        def _apply_font_size(new_size):
+            new_size = max(7, min(24, new_size))   # clamp to a sane range
+            self._review_font_size = new_size
+            fonts["title"].configure(size=new_size + 3)
+            fonts["subtitle"].configure(size=new_size)
+            fonts["header"].configure(size=new_size + 1)
+            fonts["cell"].configure(size=new_size)
+            fonts["reasons"].configure(size=new_size)
+            fonts["button"].configure(size=new_size + 1)
+            # Rows are now taller/shorter; recompute the scroll region
+            dialog.after_idle(
+                lambda: canvas.configure(scrollregion=canvas.bbox("all"))
+            )
+
+        dialog.bind("<Control-equal>", lambda e: _apply_font_size(self._review_font_size + 1))
+        dialog.bind("<Control-plus>",  lambda e: _apply_font_size(self._review_font_size + 1))
+        dialog.bind("<Control-minus>", lambda e: _apply_font_size(self._review_font_size - 1))
+        dialog.bind("<Control-0>",     lambda e: _apply_font_size(11))
+        
     # -----------------------------------------------------------------------
     # Report writing
     # -----------------------------------------------------------------------

@@ -118,7 +118,7 @@ def write_html(
         "<meta charset='utf-8'>",
         f"<title>Grade Report — {timestamp}</title>",
         "<style>",
-        "  body { font-family: Arial, sans-serif; font-size: 13px; margin: 20px; }",
+        "  body { font-family: Helvetica, Arial, sans-serif; font-size: 13px; margin: 20px; }",
         "  h1 { font-size: 18px; }",
         "  .banner { background:#fffbeb; border:1px solid #f59e0b; border-radius:6px;",
         "            padding:8px 14px; margin-bottom:14px; font-size:13px; color:#78350f; }",
