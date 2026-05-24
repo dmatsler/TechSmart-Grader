@@ -21,6 +21,10 @@ app.add_middleware(SessionMiddleware, secret_key="techsmart-mvp-secret")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+# Cache-bust static assets on each server restart — no manual ?v= bumps needed
+import time as _time
+templates.env.globals['static_version'] = str(int(_time.time()))
+
 POINTS_MAP = {0: 0, 1: 50, 2: 75, 3: 100}
 
 # ── Session helpers ───────────────────────────────────────────────────────────

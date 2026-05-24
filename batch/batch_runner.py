@@ -415,13 +415,14 @@ def compute_run_grades(
             entries: list[UnitGradeEntry] = []
             for aid in included_ids:
                 ar = result_by_id.get(aid)
-                if ar and ar.pending:
-                    continue
-                points = ar.points if ar else 0
+                if ar is None:
+                    continue  # no scraped result → exclude from grade entirely
+                if ar.pending:
+                    continue  # pending teacher review → exclude until confirmed
                 entries.append(UnitGradeEntry(
                     assignment_id=aid,
                     assignment_label=assignments.get(aid, aid),
-                    points=points,
+                    points=ar.points,
                     include=True,
                     weight=1.0,
                 ))

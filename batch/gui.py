@@ -1367,8 +1367,8 @@ class BatchGraderApp:
             import traceback
             self._log_msg(f"\n❌ Fatal error: {exc}")
             self._log_msg(traceback.format_exc())
-            self.root.after(0, lambda: messagebox.showerror(
-                "Error", f"Grading failed:\n{exc}"
+            self.root.after(0, lambda e=exc: messagebox.showerror(
+                "Error", f"Grading failed:\n{e}"
             ))
         finally:
             self.root.after(0, self._restore_idle_ui)

@@ -58,6 +58,34 @@ UNIT_REGISTRY: dict[str, dict] = {
             ("3_5_code_your_own_cyo3_5_py",                        "3.5 Code Your Own"),
         ],
     },
+    # 3.6 uses the new slug format produced by load_unit_from_markdown.py
+    # (no trailing _py — that came from the old scraper's filename suffix).
+    # When 3.5 is migrated to markdown, its slugs will change to match.
+    "3_6": {
+        "label": "Unit 3.6 — Time",
+        "fallback_assignments": [
+            ("3_6_warm_up_1",          "3.6 Warm Up 1"),
+            ("3_6_time",               "3.6 Time"),
+            ("3_6_framerate",          "3.6 Framerate"),
+            ("3_6_framerate_1",        "3.6 Framerate (1)"),
+            ("3_6_framerate_2",        "3.6 Framerate (2)"),
+            ("3_6_timers",             "3.6 Timers"),
+            ("3_6_timers_1",           "3.6 Timers (1)"),
+            ("3_6_timers_2",           "3.6 Timers (2)"),
+            ("3_6_time_review",        "3.6 Time Review"),
+            ("3_6_warm_up_2",          "3.6 Warm Up 2"),
+            ("3_6_duration",           "3.6 Duration"),
+            ("3_6_duration_1",         "3.6 Duration (1)"),
+            ("3_6_duration_2",         "3.6 Duration (2)"),
+            ("3_6_warm_up_3",          "3.6 Warm Up 3"),
+            ("3_6_reaction_timer",     "3.6 Reaction Timer"),
+            ("3_6_moving_art_gallery", "3.6 Moving Art Gallery"),
+            ("3_6_stair_ball",         "3.6 Stair Ball"),
+            ("3_6_warm_up_4",          "3.6 Warm Up 4"),
+            ("3_6_sunrise_timer",      "3.6 Sunrise Timer"),
+            ("3_6_code_your_own",      "3.6 3.6 Code Your Own"),
+        ],
+    },
 }
 
 

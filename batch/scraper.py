@@ -58,6 +58,27 @@ ASSIGNMENT_TITLE_MAP = {
     "3_5_zen_flycatcher_zenflycatcher_py":                "Zen Flycatcher",
     "3_5_color_picker_colorpicker_py":                    "Color Picker",
     "3_5_code_your_own_cyo3_5_py":                        "3.5 Code Your Own",
+    # Unit 3.6 — Time
+    "3_6_warm_up_1":          "Warm Up 1",
+    "3_6_time":               "3.6 Time",
+    "3_6_framerate":          "Framerate",
+    "3_6_framerate_1":        "Framerate (1)",
+    "3_6_framerate_2":        "Framerate (2)",
+    "3_6_timers":             "Timers",
+    "3_6_timers_1":           "Timers (1)",
+    "3_6_timers_2":           "Timers (2)",
+    "3_6_time_review":        "3.6 Time Review",
+    "3_6_warm_up_2":          "Warm Up 2",
+    "3_6_duration":           "Duration",
+    "3_6_duration_1":         "Duration (1)",
+    "3_6_duration_2":         "Duration (2)",
+    "3_6_warm_up_3":          "Warm Up 3",
+    "3_6_reaction_timer":     "Reaction Timer",
+    "3_6_moving_art_gallery": "Moving Art Gallery",
+    "3_6_stair_ball":         "Stair Ball",
+    "3_6_warm_up_4":          "Warm Up 4",
+    "3_6_sunrise_timer":      "Sunrise Timer",
+    "3_6_code_your_own":      "3.6 Code Your Own",
 }
 
 
@@ -92,8 +113,7 @@ def _infer_status(item_html: str, is_disabled: bool) -> str:
 # ---------------------------------------------------------------------------
 
 async def login(page: Page, username: str, password: str) -> None:
-    await page.goto(LOGIN_URL)
-    await page.wait_for_load_state("networkidle")
+    await page.goto(LOGIN_URL, wait_until="domcontentloaded")
 
     await page.wait_for_selector(
         'input[name="username"]', state="visible", timeout=15_000
@@ -111,7 +131,7 @@ async def login(page: Page, username: str, password: str) -> None:
 
     # Wait then navigate home — bypasses any post-login redirect weirdness
     await page.wait_for_timeout(3000)
-    await page.goto(TECHSMART_BASE, wait_until="networkidle")
+    await page.goto(TECHSMART_BASE, wait_until="domcontentloaded")
 
     if "/login" in page.url or "accounts/login" in page.url:
         raise RuntimeError(
@@ -143,7 +163,7 @@ async def discover_assignment_urls(
     if progress_callback:
         progress_callback("  Loading gradebook...")
 
-    await page.goto(gradebook_url, wait_until="networkidle")
+    await page.goto(gradebook_url, wait_until="domcontentloaded")
 
     try:
         await page.wait_for_selector(
@@ -247,7 +267,7 @@ async def discover_assignment_urls(
                     "li#ts-grade-info-dialog-action-menu__menu__list-item--view"
                 )
             new_tab = await new_page_info.value
-            await new_tab.wait_for_load_state("networkidle")
+            await new_tab.wait_for_load_state("domcontentloaded")
 
             code_url = new_tab.url
             await new_tab.close()
@@ -260,7 +280,7 @@ async def discover_assignment_urls(
                     progress_callback(f"    ⚠  Unexpected URL: {code_url}")
 
             # Back to gradebook for next assignment
-            await page.goto(gradebook_url, wait_until="networkidle")
+            await page.goto(gradebook_url, wait_until="domcontentloaded")
             await page.wait_for_selector(
                 "th.ts-gradebook-assignments-table-header-cell", timeout=20_000
             )
@@ -270,7 +290,7 @@ async def discover_assignment_urls(
             if progress_callback:
                 progress_callback(f"    ✗ Error: {exc}")
             try:
-                await page.goto(gradebook_url, wait_until="networkidle")
+                await page.goto(gradebook_url, wait_until="domcontentloaded")
                 await page.wait_for_timeout(800)
             except Exception:
                 pass
@@ -319,7 +339,7 @@ async def scrape_assignment(
     assignment_url: str,
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> list[ScrapedSubmission]:
-    await page.goto(assignment_url, wait_until="networkidle")
+    await page.goto(assignment_url, wait_until="domcontentloaded")
     await page.wait_for_selector(".CodeMirror", timeout=20_000)
     # Extra settle time — TechSmart's MDL buttons need time to become interactive
     await page.wait_for_timeout(1500)
@@ -369,7 +389,7 @@ async def scrape_assignment(
                 if _attempt == 0:
                     # First failure — reload and try once more
                     try:
-                        await page.goto(assignment_url, wait_until="networkidle")
+                        await page.goto(assignment_url, wait_until="domcontentloaded")
                         await page.wait_for_selector(".CodeMirror", timeout=15_000)
                         await page.wait_for_timeout(2000)
                     except Exception:
@@ -399,8 +419,26 @@ async def scrape_assignment(
             span = all_name_spans.nth(i)
             text = await span.text_content()
             if text and text.strip() == name:
-                await span.click()
-                clicked = True
+                try:
+                    # The dropdown renders all students in the DOM but only
+                    # the top few fit in the viewport. Playwright refuses to
+                    # click an off-screen element, so scroll it into view
+                    # first. Without this, students past the fold (typically
+                    # the 20th+ in alphabetical order) time out after 30s.
+                    await span.scroll_into_view_if_needed(timeout=5_000)
+                    await span.click(timeout=10_000)
+                    clicked = True
+                except Exception as e:
+                    if progress_callback:
+                        progress_callback(
+                            f"{label} — click failed for student #{i} "
+                            f"({text.strip()!r}): {type(e).__name__}; skipped"
+                        )
+                    # Close the menu so the next student's iteration starts clean
+                    try:
+                        await page.keyboard.press("Escape")
+                    except Exception:
+                        pass
                 break
 
         if not clicked:
@@ -415,7 +453,7 @@ async def scrape_assignment(
             ))
             continue
 
-        await page.wait_for_load_state("networkidle")
+        await page.wait_for_load_state("domcontentloaded")
         await page.wait_for_selector(".CodeMirror", timeout=15_000)
         await page.wait_for_timeout(600)
 

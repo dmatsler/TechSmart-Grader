@@ -193,10 +193,19 @@ th, td { padding: 0.6rem; border-bottom: 1px solid #e5e7eb; text-align: left; }
 }
 
 /* ── Pending review table ──────────────────────────────────────────────── */
-.pending-table { margin-bottom: 1rem; }
+.pending-table {
+  margin-bottom: 1rem;
+  table-layout: fixed;
+  width: 100%;
+}
 .pending-row { background: #fffbeb; }
 .pending-row td { vertical-align: top; }
-.flag-cell { font-size: 0.82rem; max-width: 340px; }
+.flag-cell {
+  font-size: 0.82rem;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
 .flag-reasons-inline {
   margin: 0;
   padding-left: 1.1rem;

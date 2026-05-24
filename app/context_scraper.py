@@ -1,27 +1,45 @@
 """
-Context Scraper — scrapes assignment requirements, starter code, and
-solution code directly from TechSmart and caches them locally.
+Context Scraper — scrapes assignment REQUIREMENTS from TechSmart and
+merges them into the cache. Starter code and solution code now come from
+hand-curated markdown files (see load_unit_from_markdown.py); the scraper
+no longer touches those fields.
 
-How it works:
-  1. Navigate the gradebook to auto-discover all assignment column headers.
-  2. For each assignment, navigate to its page and extract:
-       - Requirements text
-       - Starter code (the template given to students)
-       - Solution code URL → navigate and extract solution code
-  3. Hash each piece of content. On subsequent runs, only re-scrape if
-     the live content hash differs from the cached hash (change detection).
-  4. Cache is stored as context_cache_{unit_slug}.json in the project root.
+Why this changed:
+  The student-facing TechSmart pages don't expose solution code, and the
+  "starter" the scraper was grabbing was actually whatever code was in
+  the first student's editor (fully implemented submissions, not blank
+  starters). This made the line-count integrity check unable to fire.
+  Markdown sources for starter/solution give us a real source of truth.
+
+How it works now:
+  1. Discover assignment URLs from the gradebook (unchanged).
+  2. For each assignment, navigate to its page and extract requirements
+     text only.
+  3. Hash the requirements. Re-scrape an assignment only when its live
+     requirements hash differs from the cached hash.
+  4. PRESERVE everything else in each cache entry — starter_code,
+     solution_code, their hashes, and assignment_type — because those
+     are populated by load_unit_from_markdown.py from the hand-curated
+     unit_X_Y_solutions.md and unit_X_Y_starter_code.md files.
+  5. Cache is stored as context_cache_{unit_slug}.json in the project root.
+
+Recommended order of operations for a unit:
+  1. Run load_unit_from_markdown.py first to populate starter_code,
+     solution_code, and assignment_type from your markdown files.
+  2. Run refresh_context_cache() to fill in requirements.
+  Either order works — the two operations are independent; they update
+  disjoint fields and preserve each other's work.
 
 Usage (from batch runner, before grading):
     from app.context_scraper import refresh_context_cache, load_context_cache
     await refresh_context_cache(
-        unit_slug="3_5",
+        unit_slug="3_6",
         gradebook_url="https://...",
         username="...",
         password="...",
         progress_callback=print,
     )
-    cache = load_context_cache("3_5")
+    cache = load_context_cache("3_6")
 """
 from __future__ import annotations
 
@@ -78,7 +96,7 @@ def _content_hash(text: str) -> str:
 async def _login(page, username: str, password: str) -> None:
     """Login using the same robust flow as the student scraper."""
     await page.goto(TECHSMART_BASE)
-    await page.wait_for_load_state("networkidle")
+    await page.wait_for_load_state("domcontentloaded")
 
     # If already logged in, skip
     if "/login" not in page.url and "accounts/login" not in page.url:
@@ -97,22 +115,10 @@ async def _login(page, username: str, password: str) -> None:
 
     await page.click('button[type="submit"]')
     await page.wait_for_timeout(3000)
-    await page.goto(TECHSMART_BASE, wait_until="networkidle")
+    await page.goto(TECHSMART_BASE, wait_until="domcontentloaded")
 
     if "/login" in page.url or "accounts/login" in page.url:
         raise RuntimeError("Login failed — check TechSmart credentials in .env")
-
-
-async def _extract_code_from_page(page) -> str:
-    """Extract code from a TechSmart code page (CodeMirror editor)."""
-    try:
-        code = await page.evaluate(
-            "() => { const el = document.querySelector('.CodeMirror'); "
-            "return el && el.CodeMirror ? el.CodeMirror.getValue() : ''; }"
-        )
-        return (code or "").strip()
-    except Exception:
-        return ""
 
 
 async def _extract_requirements(page) -> str:
@@ -145,38 +151,56 @@ async def _extract_requirements(page) -> str:
 # ---------------------------------------------------------------------------
 
 async def _discover_assignments(
-    page, gradebook_url: str, progress_callback: Optional[Callable] = None
+    page, context, gradebook_url: str, unit_slug: str,
+    progress_callback: Optional[Callable] = None
 ) -> list[dict]:
-    """Navigate the gradebook and return a list of assignment dicts:
-    [{assignment_id, title, column_index, assignment_page_url}]
+    """Discover assignment URLs by delegating to scraper.discover_assignment_urls,
+    which navigates TechSmart correctly (the gradebook column headers don't contain
+    <a> tags — the assignment URL is only accessible by clicking through a student
+    cell, and scraper.py already does that dance).
+
+    Source of truth for which assignments exist in this unit:
+    UNIT_REGISTRY[unit_slug]["fallback_assignments"] (you maintain this manually).
+
+    Returns list of {title, href, assignment_id} dicts in the shape
+    _scrape_assignment_context expects.
     """
-    await page.goto(gradebook_url, wait_until="networkidle")
-    await page.wait_for_selector(
-        "th.ts-gradebook-assignments-table-header-cell", timeout=20_000
+    from batch.scraper import discover_assignment_urls
+    from app.config_loader import UNIT_REGISTRY
+
+    unit = UNIT_REGISTRY.get(unit_slug, {})
+    fallback_assignments = unit.get("fallback_assignments", [])
+
+    if not fallback_assignments:
+        if progress_callback:
+            progress_callback(
+                f"  ⚠ No fallback_assignments listed for {unit_slug!r} in UNIT_REGISTRY. "
+                f"Add the assignment IDs and titles to config_loader.py before running "
+                f"the context refresh."
+            )
+        return []
+
+    assignment_ids = [aid for aid, _ in fallback_assignments]
+    title_by_id = dict(fallback_assignments)
+
+    # Delegate URL discovery to scraper.py — its click-through navigation works
+    url_by_id = await discover_assignment_urls(
+        page, context, gradebook_url, assignment_ids, progress_callback
     )
 
-    assignments = await page.evaluate("""
-        () => {
-            const headers = Array.from(document.querySelectorAll(
-                'th.ts-gradebook-assignments-table-header-cell'
-            ));
-            return headers.map((th, idx) => {
-                const titleEl = th.querySelector(
-                    'p.ts-gradebook-assignments-table-header-cell__content__title, '
-                    + '[class*="title"]'
-                );
-                const linkEl = th.querySelector('a[href]');
-                return {
-                    title: titleEl ? titleEl.textContent.trim() : '',
-                    href: linkEl ? linkEl.href : '',
-                    col_index: idx,
-                };
-            }).filter(a => a.title);
-        }
-    """)
+    assignments = []
+    for aid in assignment_ids:
+        url = url_by_id.get(aid)
+        if not url:
+            continue  # discover_assignment_urls already logged the miss
+        assignments.append({
+            "title": title_by_id.get(aid, aid),
+            "href": url,
+            "assignment_id": aid,
+        })
 
     if progress_callback:
-        progress_callback(f"  Discovered {len(assignments)} assignment columns")
+        progress_callback(f"  Discovered URLs for {len(assignments)} assignments\n")
 
     return assignments
 
@@ -200,14 +224,20 @@ def _title_to_id(title: str, unit_slug: str) -> str:
 
 async def _scrape_assignment_context(
     page,
-    context_page,   # second tab for solution code
     assignment: dict,
     cached: dict,
     progress_callback: Optional[Callable] = None,
 ) -> dict | None:
-    """Scrape (or return cached) context for one assignment.
+    """Scrape (or return cached) REQUIREMENTS for one assignment.
 
-    Returns updated context dict, or None if nothing changed.
+    Starter code, solution code, and assignment_type are NOT touched here;
+    they come from load_unit_from_markdown.py and are preserved verbatim
+    from the cached entry.
+
+    Returns updated context dict, or None if nothing changed and a cached
+    entry already exists. Returns a partial new entry (just requirements
+    plus metadata) when no cached entry exists yet — load_unit_from_markdown
+    can fill in the code fields later.
     """
     title = assignment["title"]
     href = assignment.get("href", "")
@@ -219,73 +249,57 @@ async def _scrape_assignment_context(
 
     # Navigate to assignment page
     try:
-        await page.goto(href, wait_until="networkidle")
+        await page.goto(href, wait_until="domcontentloaded")
         await page.wait_for_timeout(800)
     except Exception as e:
         if progress_callback:
             progress_callback(f"    ✗ Could not load {title}: {e}")
         return None
 
-    # Extract requirements
+    # Extract requirements — the only field the scraper still owns
     requirements = await _extract_requirements(page)
     req_hash = _content_hash(requirements)
 
-    # Extract starter code
-    starter_code = await _extract_code_from_page(page)
-    starter_hash = _content_hash(starter_code)
-
-    # Find solution code link on the assignment page
-    solution_code = ""
-    solution_hash = ""
-    try:
-        solution_href = await page.evaluate("""
-            () => {
-                const links = Array.from(document.querySelectorAll('a[href]'));
-                const sol = links.find(a =>
-                    a.textContent.toLowerCase().includes('solution') ||
-                    a.href.includes('/code/')
-                );
-                return sol ? sol.href : '';
-            }
-        """)
-        if solution_href:
-            await context_page.goto(solution_href, wait_until="networkidle")
-            await context_page.wait_for_timeout(500)
-            solution_code = await _extract_code_from_page(context_page)
-            solution_hash = _content_hash(solution_code)
-    except Exception:
-        pass
-
-    # Check if anything changed vs cache
-    assignment_id = _title_to_id(title, assignment.get("unit_slug", "unknown"))
+    # Identify the cache slot. Prefer the assignment_id from UNIT_REGISTRY
+    # (canonical) over slugifying the title (lossy).
+    assignment_id = assignment.get("assignment_id") or _title_to_id(
+        title, assignment.get("unit_slug", "unknown")
+    )
     cached_entry = cached.get(assignment_id, {})
 
-    changed = (
-        cached_entry.get("req_hash") != req_hash
-        or cached_entry.get("starter_hash") != starter_hash
-        or cached_entry.get("solution_hash") != solution_hash
-    )
-
-    if not changed and cached_entry:
+    # Change detection: requirements is the only field this scraper updates,
+    # so a hash match on requirements means nothing has changed for us.
+    if cached_entry and cached_entry.get("req_hash") == req_hash:
         if progress_callback:
             progress_callback(f"    ✓ {title} — unchanged (using cache)")
         return cached_entry
 
     if progress_callback:
-        status = "updated" if cached_entry else "new"
+        status = "requirements updated" if cached_entry else "new (requirements only)"
         progress_callback(f"    ↻ {title} — {status}")
 
-    return {
+    # Build the updated entry by PRESERVING everything else from the
+    # cached entry (starter_code, solution_code, their hashes, the
+    # assignment_type that load_unit_from_markdown set, etc.) and
+    # touching only the requirements-related fields.
+    updated_entry = dict(cached_entry)
+    updated_entry.update({
         "assignment_id": assignment_id,
         "title": title,
         "requirements": requirements,
-        "starter_code": starter_code,
-        "solution_code": solution_code,
         "req_hash": req_hash,
-        "starter_hash": starter_hash,
-        "solution_hash": solution_hash,
         "scraped_at": datetime.now().isoformat(),
-    }
+    })
+    # When no markdown has been loaded yet, make sure these fields exist
+    # with empty defaults so consumers don't KeyError. The markdown loader
+    # will fill them in on its next run without disturbing requirements.
+    updated_entry.setdefault("starter_code", "")
+    updated_entry.setdefault("solution_code", "")
+    updated_entry.setdefault("starter_hash", "")
+    updated_entry.setdefault("solution_hash", "")
+    updated_entry.setdefault("assignment_type", "")
+
+    return updated_entry
 
 
 # ---------------------------------------------------------------------------
@@ -317,19 +331,18 @@ async def refresh_context_cache(
         browser = await p.firefox.launch(headless=headless)
         context = await browser.new_context()
         page = await context.new_page()
-        solution_tab = await context.new_page()  # dedicated tab for solution pages
 
         try:
             await _login(page, username, password)
 
             assignments = await _discover_assignments(
-                page, gradebook_url, progress_callback
+                page, context, gradebook_url, unit_slug, progress_callback
             )
 
             for assignment in assignments:
                 assignment["unit_slug"] = unit_slug
                 result = await _scrape_assignment_context(
-                    page, solution_tab, assignment, cached, progress_callback
+                    page, assignment, cached, progress_callback
                 )
                 if result:
                     aid = result.get("assignment_id", _title_to_id(

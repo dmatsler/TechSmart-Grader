@@ -43,9 +43,6 @@ INTEGRITY RULES — apply these before scoring:
   - Random lines of code that don't relate to the assignment's objective = score 0, flag it.
   - Code clearly copied from a DIFFERENT assignment (wrong shapes, wrong variables,
     wrong objective entirely) = score 0, flag it.
-  - If line count is provided and is significantly higher than expected
-    (more than ~150% of expected), note it as a flag but do not automatically
-    reduce the score — use your judgment based on what the code actually does.
   - Code using constructs not taught at this level (classes, decorators, list
     comprehensions, lambda) should be flagged as possible AI-generated or
     copied code. Score the work on its merits but flag it for teacher review.
@@ -54,6 +51,34 @@ INTEGRITY RULES — apply these before scoring:
     curriculum (e.g. numpy, requests, tensorflow).
   - Starter/template code alone (code the teacher provided that the student
     did not modify) = score 0 or 1 depending on submission status.
+""".strip()
+
+# ---------------------------------------------------------------------------
+# Grading priorities — how to read the context above
+# ---------------------------------------------------------------------------
+
+GRADING_PRIORITIES = """
+HOW TO READ THE CONTEXT ABOVE — apply these before scoring:
+
+  1. SOLUTION CODE is the authoritative reference for what the student's
+     code should DO. Compare the student's submission against what the
+     solution code produces — NOT against what the assignment title's
+     plain-English reading suggests the lesson "should" teach. If the
+     title and the solution code seem to conflict, the solution code wins.
+
+  2. STARTER CODE is given to every student. It is fixed background — the
+     student did not write it. Do not credit, penalise, or flag the student
+     for starter lines. If a line is in the starter, treat it as given.
+
+  3. The student's actual work is only what they ADDED to the starter.
+     This may be just a few lines. A submission is correct when the
+     student's added code, combined with the unchanged starter, produces
+     the same observable behavior as the solution.
+
+  4. Stylistic differences from the solution do NOT lower the score:
+     different variable names, f-strings vs string concatenation, or
+     reordering of statements that don't affect behavior are all fine.
+     Grade behavior, not surface form.
 """.strip()
 
 # ---------------------------------------------------------------------------
@@ -75,6 +100,55 @@ TECHSMART CURRICULUM CONTEXT — read carefully:
   - Other modules that may appear and are expected at this level: pygame,
     random, tsk. Standard library modules (math, time, etc.) are also fine.
 """.strip()
+
+# ---------------------------------------------------------------------------
+# Per-assignment grading notes — for assignments where the title misleads
+# ---------------------------------------------------------------------------
+
+ASSIGNMENT_NOTES: dict[str, str] = {
+    "3_5_saving_a_tuple_2_technique1practice2_py": (
+        "This lesson teaches UNPACKING a tuple into separate variables "
+        "(the technique 'r, g, b = color'), NOT creating a new tuple. "
+        "The student's task is to:\n"
+        "  1. Unpack the existing 'color' tuple into three variables (any names: r/g/b or red/green/blue).\n"
+        "  2. Print each of the three variables on a separate line.\n"
+        "A student who does these two things has fully completed the assignment "
+        "and MUST receive 3/3. Do NOT require them to create a new tuple variable. "
+        "Do NOT require f-strings or string concatenation — either is acceptable. "
+        "The 'input()' call and 'pygame.time.wait()' call are in the starter code; "
+        "do not flag, penalise, or comment on them."
+    ),
+}
+
+# ---------------------------------------------------------------------------
+# Deterministic line-count helpers — for AI-assistance detection
+# ---------------------------------------------------------------------------
+
+def _count_nonblank_lines(code: str) -> int:
+    """Count non-blank lines (any line with at least one non-whitespace char)."""
+    return sum(1 for line in code.splitlines() if line.strip())
+
+
+def _added_line_counts(
+    student_code: str, context: AssignmentContext
+) -> tuple[int, int] | None:
+    """
+    Compute (actual_added, expected_added) — lines the student wrote BEYOND
+    the starter code, vs. lines the solution adds BEYOND the starter.
+
+    Returns None when starter or solution are missing (no meaningful ratio
+    can be computed) or when the assignment has no "added" work to compare.
+    """
+    if not context.starter_code or not context.solution_code or not student_code:
+        return None
+    starter_lines = _count_nonblank_lines(context.starter_code)
+    solution_lines = _count_nonblank_lines(context.solution_code)
+    student_lines = _count_nonblank_lines(student_code)
+    expected_added = solution_lines - starter_lines
+    actual_added = student_lines - starter_lines
+    if expected_added <= 0:
+        return None
+    return (actual_added, expected_added)
 
 # ---------------------------------------------------------------------------
 # Prompt builder
@@ -117,6 +191,13 @@ def _build_prompt(
         else ""
     )
 
+    note = ASSIGNMENT_NOTES.get(context.assignment_id, "")
+    note_section = (
+        f"\nPER-ASSIGNMENT GRADING NOTE — this OVERRIDES any conflicting "
+        f"interpretation from the title, requirements, or your own assumptions:\n{note}\n"
+        if note else ""
+    )
+
     solution_section = (
         f"\nSOLUTION CODE (reference for what a correct answer looks like):\n"
         f"```python\n{context.solution_code}\n```"
@@ -127,8 +208,10 @@ def _build_prompt(
     return f"""You are grading a middle school Python/Pygame assignment.
 
 {TECHSMART_CONTEXT}
-
+{note_section}
 {requirements_section}{starter_section}{solution_section}
+
+{GRADING_PRIORITIES}
 
 {RUBRIC_DEFINITIONS}
 
@@ -245,6 +328,39 @@ def grade_submission(
     # started_not_submitted caps at 1
     if payload.status == SubmissionStatus.STARTED_NOT_SUBMITTED:
         score = min(score, 1)
+
+    # Compute line counts ONCE — used by both debug logging and integrity check.
+    # Order matters: assignment must come before any reference to line_counts.
+    line_counts = _added_line_counts(payload.student_code or "", context)
+
+    # TEMP DEBUG — writes to /tmp/grader_debug.log; remove after diagnosis
+    try:
+        with open("/tmp/grader_debug.log", "a", encoding="utf-8") as _f:
+            _starter = _count_nonblank_lines(context.starter_code) if context.starter_code else "EMPTY"
+            _solution = _count_nonblank_lines(context.solution_code) if context.solution_code else "EMPTY"
+            _student = _count_nonblank_lines(payload.student_code or "")
+            _f.write(
+                f"{assignment_id} | score={score} | "
+                f"starter={_starter} | solution={_solution} | "
+                f"student={_student} | line_counts={line_counts}\n"
+            )
+    except Exception:
+        pass  # never let debug logging break grading
+
+    # AI-assisted submission detection: student added significantly more lines
+    # than the solution adds AND the code is functional.
+    if line_counts is not None and score >= 2:
+        actual, expected = line_counts
+        if actual > 1.5 * expected:
+            pct = int((actual / expected) * 100)
+            ai_flag = (
+                f"Possible AI-assisted submission: student wrote {pct}% of "
+                f"expected line count ({actual} added lines vs {expected} expected) "
+                f"AND code is functional. Pattern matches AI/copy submissions — "
+                f"review before confirming."
+            )
+            if ai_flag not in flags:
+                flags.append(ai_flag)
 
     points = POINTS_MAP.get(score, 0)
 

@@ -11,6 +11,13 @@ __pycache__/
 # Scraped from platform.techsmart.codes — their copyrighted material
 context_cache_*.json
 
+# Hand-curated TechSmart solution + starter code in markdown form
+# (source-of-truth that feeds context_cache_*.json via load_unit_from_markdown.py)
+# Same copyright reasoning as the cache itself — TechSmart's material.
+unit_*_solutions.md
+unit_*_starter_code.md
+unit_*_starters.md
+
 # User-specific state — class IDs, saved run configs, active unit
 gradebook_url*.json
 saved_runs*.json
